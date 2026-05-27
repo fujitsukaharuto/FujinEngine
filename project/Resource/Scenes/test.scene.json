@@ -1,0 +1,428 @@
+{
+  "actors": [
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            10.0,
+            0.0
+          ],
+          "rotation": [
+            -0.3826834559440613,
+            0.0,
+            0.0,
+            0.9238795042037964
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "color": [
+            1.0,
+            0.949999988079071,
+            0.800000011920929
+          ],
+          "intensity": 2.0,
+          "lightType": "Directional",
+          "range": 10.0,
+          "spotAngle": 45.0,
+          "type": "LightComponent"
+        }
+      ],
+      "id": 1,
+      "name": "DirectionalLight",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            3.0,
+            2.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "color": [
+            0.30000001192092896,
+            0.699999988079071,
+            1.0
+          ],
+          "intensity": 5.0,
+          "lightType": "Point",
+          "range": 15.0,
+          "spotAngle": 45.0,
+          "type": "LightComponent"
+        }
+      ],
+      "id": 2,
+      "name": "PointLight",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            0.0,
+            5.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "type": "MeshComponent"
+        }
+      ],
+      "id": 3,
+      "name": "Cube",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            2.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "type": "MeshComponent"
+        }
+      ],
+      "id": 4,
+      "name": "CubeChild",
+      "parentId": 3
+    },
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            -0.5,
+            5.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            20.0,
+            1.0,
+            20.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "type": "MeshComponent"
+        }
+      ],
+      "id": 5,
+      "name": "Ground",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -2.0,
+            0.0,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/run.gltf",
+          "type": "MeshComponent"
+        },
+        {
+          "clipName": "",
+          "loop": true,
+          "playing": true,
+          "speed": 1.0,
+          "timeOffset": 0.0,
+          "type": "AnimationComponent"
+        }
+      ],
+      "id": 6,
+      "name": "RunCharacter_A",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            0.0,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/run.gltf",
+          "type": "MeshComponent"
+        },
+        {
+          "clipName": "",
+          "loop": true,
+          "playing": true,
+          "speed": 1.0,
+          "timeOffset": 0.3499999940395355,
+          "type": "AnimationComponent"
+        }
+      ],
+      "id": 7,
+      "name": "RunCharacter_B",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            2.0,
+            0.0,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "alphaClip": false,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/run.gltf",
+          "type": "MeshComponent"
+        },
+        {
+          "clipName": "",
+          "loop": true,
+          "playing": true,
+          "speed": 1.0,
+          "timeOffset": 0.699999988079071,
+          "type": "AnimationComponent"
+        }
+      ],
+      "id": 8,
+      "name": "RunCharacter_C",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -1.0,
+            0.0,
+            5.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "autoPlay": true,
+          "effectPath": "",
+          "type": "ParticleComponent"
+        }
+      ],
+      "id": 9,
+      "name": "SteamEmitter",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            1.0,
+            0.5,
+            5.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "autoPlay": true,
+          "effectPath": "",
+          "type": "ParticleComponent"
+        }
+      ],
+      "id": 10,
+      "name": "SparkEmitter",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            3.0,
+            0.0,
+            5.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "autoPlay": true,
+          "effectPath": "",
+          "type": "ParticleComponent"
+        }
+      ],
+      "id": 11,
+      "name": "BeamEmitter",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            0.0,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "autoPlay": true,
+          "effectPath": "",
+          "type": "ParticleComponent"
+        }
+      ],
+      "id": 12,
+      "name": "GPUFireEmitter",
+      "parentId": 0
+    }
+  ],
+  "nextId": 13,
+  "version": 1
+}

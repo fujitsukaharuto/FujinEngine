@@ -18,13 +18,13 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
@@ -53,24 +53,31 @@
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <PreBuildEvent>
+      <Command>powershell -NonInteractive -ExecutionPolicy Bypass -File "$(ProjectDir)Tools\compile_shaders.ps1" -ProjectDir "$(ProjectDir)" -Configuration "$(Configuration)"</Command>
+      <Message>Compiling HLSL shaders with DXC...</Message>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_DEBUGMODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_DEBUGMODE;IMGUI_DEFINE_MATH_OPERATORS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <TreatWarningAsError>true</TreatWarningAsError>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)Externals\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)Externals\assimp\include;$(ProjectDir)Externals\DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)Externals\assimp\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>assimp-vc143-mtd.lib;dxcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -79,14 +86,14 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;IMGUI_DEFINE_MATH_OPERATORS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <TreatWarningAsError>false</TreatWarningAsError>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)Externals\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)Externals\assimp\include;$(ProjectDir)Externals\DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -97,6 +104,189 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Engine\Core\Win32Window.cpp" />
+    <ClCompile Include="Engine\Core\Component.cpp" />
+    <ClCompile Include="Engine\Core\Actor.cpp" />
+    <ClCompile Include="Engine\Core\TransformComponent.cpp" />
+    <ClCompile Include="Engine\Core\MeshComponent.cpp" />
+    <ClCompile Include="Engine\Core\AnimationComponent.cpp" />
+    <ClCompile Include="Engine\Core\LightComponent.cpp" />
+    <ClCompile Include="Engine\Core\CameraComponent.cpp" />
+    <ClCompile Include="Engine\Camera\DebugCamera.cpp" />
+    <ClCompile Include="Engine\Core\SceneManager.cpp" />
+    <ClCompile Include="Engine\Asset\SceneSerializer.cpp" />
+    <ClCompile Include="Engine\Graphics\GraphicsDevice.cpp" />
+    <ClCompile Include="Engine\Math\Matrix.cpp" />
+    <ClCompile Include="Engine\Math\Quaternion.cpp" />
+    <ClCompile Include="Engine\Math\Vector.cpp" />
+    <ClCompile Include="Editor\EditorApp.cpp" />
+    <ClCompile Include="Editor\Panels\SceneHierarchyPanel.cpp" />
+    <ClCompile Include="Editor\Panels\InspectorPanel.cpp" />
+    <ClCompile Include="Editor\Panels\ContentBrowserPanel.cpp" />
+    <ClCompile Include="Editor\Panels\RenderPassEditorPanel.cpp" />
+    <ClCompile Include="Editor\Panels\EffectEditorPanel.cpp" />
+    <ClCompile Include="Editor\Panels\PostProcessPanel.cpp" />
+    <ClCompile Include="Engine\Asset\GeometryManager.cpp" />
+    <ClCompile Include="Engine\Asset\TextureManager.cpp" />
+    <ClCompile Include="Engine\Renderer\GBuffer.cpp" />
+    <ClCompile Include="Engine\Renderer\GBufferPass.cpp" />
+    <ClCompile Include="Engine\Renderer\LightingPass.cpp" />
+    <ClCompile Include="Engine\Renderer\ShadowPass.cpp" />
+    <ClCompile Include="Engine\Renderer\IBLPreprocessor.cpp" />
+    <ClCompile Include="Engine\Renderer\SceneRenderer.cpp" />
+    <ClCompile Include="Engine\Renderer\RenderGraph\RenderGraph.cpp" />
+    <ClCompile Include="Engine\Renderer\Effect\Emitter.cpp" />
+    <ClCompile Include="Engine\Renderer\Effect\ParticlePresets.cpp" />
+    <ClCompile Include="Engine\Renderer\Effect\ParticlePass.cpp" />
+    <ClCompile Include="Engine\Renderer\PostProcess\PostProcessPass.cpp" />
+    <ClCompile Include="Engine\Core\ParticleComponent.cpp" />
+    <ClCompile Include="Engine\Renderer\Material\MaterialManager.cpp" />
+    <ClCompile Include="Engine\Graphics\ShaderReflection.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Engine\Core\Win32Window.h" />
+    <ClInclude Include="Engine\Core\Component.h" />
+    <ClInclude Include="Engine\Core\Actor.h" />
+    <ClInclude Include="Engine\Core\TransformComponent.h" />
+    <ClInclude Include="Engine\Core\MeshComponent.h" />
+    <ClInclude Include="Engine\Core\AnimationComponent.h" />
+    <ClInclude Include="Engine\Core\CameraComponent.h" />
+    <ClInclude Include="Engine\Camera\DebugCamera.h" />
+    <ClInclude Include="Engine\Animation\AnimationTypes.h" />
+    <ClInclude Include="Engine\Asset\SkeletalMeshAsset.h" />
+    <ClInclude Include="Engine\Core\LightComponent.h" />
+    <ClInclude Include="Engine\Core\SceneManager.h" />
+    <ClInclude Include="Engine\Asset\SceneSerializer.h" />
+    <ClInclude Include="Engine\Graphics\DxcHelper.h" />
+    <ClInclude Include="Engine\Graphics\GraphicsDevice.h" />
+    <ClInclude Include="Engine\Asset\MeshAsset.h" />
+    <ClInclude Include="Engine\Asset\GeometryManager.h" />
+    <ClInclude Include="Engine\Asset\TextureManager.h" />
+    <ClInclude Include="Engine\Renderer\GBuffer.h" />
+    <ClInclude Include="Engine\Renderer\GBufferPass.h" />
+    <ClInclude Include="Engine\Renderer\LightingPass.h" />
+    <ClInclude Include="Engine\Renderer\ShadowPass.h" />
+    <ClInclude Include="Engine\Renderer\IBLPreprocessor.h" />
+    <ClInclude Include="Engine\Renderer\SceneRenderer.h" />
+    <ClInclude Include="Engine\Renderer\RenderGraph\RGTypes.h" />
+    <ClInclude Include="Engine\Renderer\RenderGraph\RenderGraph.h" />
+    <ClInclude Include="Engine\Renderer\Material\Material.h" />
+    <ClInclude Include="Engine\Renderer\Material\MaterialManager.h" />
+    <ClInclude Include="Engine\Graphics\ShaderReflectionTypes.h" />
+    <ClInclude Include="Engine\Graphics\ShaderReflection.h" />
+    <ClInclude Include="Engine\Math\Math.h" />
+    <ClInclude Include="Engine\Math\MathBase.h" />
+    <ClInclude Include="Engine\Math\Matrix.h" />
+    <ClInclude Include="Engine\Math\Quaternion.h" />
+    <ClInclude Include="Engine\Math\Vector.h" />
+    <ClInclude Include="Editor\EditorApp.h" />
+    <ClInclude Include="Editor\Panels\SceneHierarchyPanel.h" />
+    <ClInclude Include="Editor\Panels\InspectorPanel.h" />
+    <ClInclude Include="Editor\Panels\ContentBrowserPanel.h" />
+    <ClInclude Include="Editor\Panels\RenderPassEditorPanel.h" />
+    <ClInclude Include="Editor\Panels\EffectEditorPanel.h" />
+    <ClInclude Include="Editor\Panels\PostProcessPanel.h" />
+    <ClInclude Include="Engine\Renderer\Effect\ParticleTypes.h" />
+    <ClInclude Include="Engine\Renderer\Effect\Emitter.h" />
+    <ClInclude Include="Engine\Renderer\Effect\ParticlePass.h" />
+    <ClInclude Include="Engine\Renderer\PostProcess\PostProcessPass.h" />
+    <ClInclude Include="Engine\Core\ParticleComponent.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resource\Shaders\GBufferPass.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\GBufferPassSkinned.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\GBufferPass.PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\LightingPass.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\LightingPass.PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\ShadowPass.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Tools\compile_shaders.ps1">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\IBL_BRDF.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\IBL_Irradiance.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\IBL_Prefilter.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\ShadowPassSkinned.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\Particle.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\Particle.PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\Beam.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\Beam.PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\ParticleGPU.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\ParticleGPU_Spawn.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\ParticleGPU_Update.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\SSAO.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\SSAOBlur.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\BloomDownsample.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\BloomUpsample.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\TonemapFXAA.PS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\Random.hlsli" />
+    <None Include="Resource\Shaders\Noise.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
