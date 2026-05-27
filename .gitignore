@@ -13,6 +13,11 @@
 # ImGui settings
 imgui.ini
 
+# Engine_Pre
+Engine_Pre/
+Resource_Pre/
+NewEngine.md
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
