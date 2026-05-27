@@ -120,6 +120,7 @@
     <ClCompile Include="Engine\Math\Quaternion.cpp" />
     <ClCompile Include="Engine\Math\Vector.cpp" />
     <ClCompile Include="Editor\EditorApp.cpp" />
+    <ClCompile Include="Editor\Command\TransformCommand.cpp" />
     <ClCompile Include="Editor\Panels\SceneHierarchyPanel.cpp" />
     <ClCompile Include="Editor\Panels\InspectorPanel.cpp" />
     <ClCompile Include="Editor\Panels\ContentBrowserPanel.cpp" />
@@ -140,6 +141,9 @@
     <ClCompile Include="Engine\Renderer\Effect\ParticlePass.cpp" />
     <ClCompile Include="Engine\Renderer\PostProcess\PostProcessPass.cpp" />
     <ClCompile Include="Engine\Core\ParticleComponent.cpp" />
+    <ClCompile Include="Engine\Core\RigidbodyComponent.cpp" />
+    <ClCompile Include="Engine\Core\ColliderComponent.cpp" />
+    <ClCompile Include="Engine\Physics\PhysicsWorld.cpp" />
     <ClCompile Include="Engine\Renderer\Material\MaterialManager.cpp" />
     <ClCompile Include="Engine\Graphics\ShaderReflection.cpp" />
   </ItemGroup>
@@ -180,6 +184,9 @@
     <ClInclude Include="Engine\Math\Quaternion.h" />
     <ClInclude Include="Engine\Math\Vector.h" />
     <ClInclude Include="Editor\EditorApp.h" />
+    <ClInclude Include="Editor\Command\ICommand.h" />
+    <ClInclude Include="Editor\Command\CommandHistory.h" />
+    <ClInclude Include="Editor\Command\TransformCommand.h" />
     <ClInclude Include="Editor\Panels\SceneHierarchyPanel.h" />
     <ClInclude Include="Editor\Panels\InspectorPanel.h" />
     <ClInclude Include="Editor\Panels\ContentBrowserPanel.h" />
@@ -191,6 +198,9 @@
     <ClInclude Include="Engine\Renderer\Effect\ParticlePass.h" />
     <ClInclude Include="Engine\Renderer\PostProcess\PostProcessPass.h" />
     <ClInclude Include="Engine\Core\ParticleComponent.h" />
+    <ClInclude Include="Engine\Core\RigidbodyComponent.h" />
+    <ClInclude Include="Engine\Core\ColliderComponent.h" />
+    <ClInclude Include="Engine\Physics\PhysicsWorld.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resource\Shaders\GBufferPass.VS.hlsl">

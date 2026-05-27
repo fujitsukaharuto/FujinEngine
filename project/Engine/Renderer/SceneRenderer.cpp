@@ -95,6 +95,8 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     Matrix4x4 viewProj     = proj * view;
     Matrix4x4 invViewProj  = viewProj.GetInverse();
     m_lastViewProj = viewProj;
+    m_lastView     = view;
+    m_lastProj     = proj;
     Vector3   cameraForward = (CameraTarget - CameraPos).GetSafeNormal();
 
     // --- CPU: compute shadow cascades ---

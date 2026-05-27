@@ -36,6 +36,8 @@ public:
     void Resize(GraphicsDevice& gfx, uint32_t width, uint32_t height);
     void Shutdown();
     const Matrix4x4&  GetLastViewProj()     const { return m_lastViewProj; }
+    const Matrix4x4&  GetLastView()         const { return m_lastView; }
+    const Matrix4x4&  GetLastProj()         const { return m_lastProj; }
     MaterialManager&  GetMaterialManager()        { return m_matMgr; }
     const RenderGraph& GetRenderGraph()   const { return m_rg; }
     PostProcessPass&  GetPostProcess()          { return m_postProcess; }
@@ -55,6 +57,8 @@ private:
     float            m_totalTime = 0.0f;
 
     Matrix4x4 m_lastViewProj;
+    Matrix4x4 m_lastView;
+    Matrix4x4 m_lastProj;
 
     std::chrono::steady_clock::time_point m_lastFrameTime;
     bool                                  m_firstFrame = true;

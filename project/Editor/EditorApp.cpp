@@ -5,11 +5,15 @@
 #include "Engine/Core/Actor.h"
 #include "Engine/Core/TransformComponent.h"
 #include "Engine/Core/CameraComponent.h"
+#include "Engine/Core/LightComponent.h"
+#include "Engine/Core/ColliderComponent.h"
 #include "Engine/Asset/SceneSerializer.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
+#include "ImGuizmo.h"
+#include "Editor/Command/ICommand.h"
 #include <cmath>
 #include <cstdio>
 
@@ -268,6 +272,8 @@ bool EditorApp::Initialize(HWND hwnd, GraphicsDevice& gfx, SceneManager& scene) 
 
     m_renderPassPanel.Initialize();
 
+    m_inspectorPanel.SetCommandHistory(&m_cmdHistory);
+
     // Wire up the "Edit Effect" callback so InspectorPanel can open the full editor
     m_inspectorPanel.SetEditEffectCallback([this](Actor* a) {
         m_effectEditActor = a;
@@ -302,6 +308,7 @@ void EditorApp::BeginFrame(float dt) {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
 
     // FPS tracking (exponential moving average, τ ≈ 10 frames)
     m_dt = dt;
@@ -354,6 +361,13 @@ void EditorApp::BeginFrame(float dt) {
         ImGui::EndMainMenuBar();
     }
 
+    // Undo / Redo
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
+        m_cmdHistory.Undo();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+        m_cmdHistory.Redo();
+
     DrawToolbar();
     DrawFPSOverlay();
     if (!m_effectEditOpen)
@@ -371,6 +385,301 @@ void EditorApp::BeginFrame(float dt) {
         else        { m_effectPanel.DrawFull(m_effectEditActor, m_effectEditOpen); }
     }
 }
+
+// ─── Gizmo Helpers ───────────────────────────────────────────────────────────
+
+Vector3 EditorApp::ExtractScale(const Matrix4x4& m) {
+    return Vector3(
+        std::sqrt(m.m[0][0]*m.m[0][0] + m.m[0][1]*m.m[0][1] + m.m[0][2]*m.m[0][2]),
+        std::sqrt(m.m[1][0]*m.m[1][0] + m.m[1][1]*m.m[1][1] + m.m[1][2]*m.m[1][2]),
+        std::sqrt(m.m[2][0]*m.m[2][0] + m.m[2][1]*m.m[2][1] + m.m[2][2]*m.m[2][2])
+    );
+}
+
+Quaternion EditorApp::ExtractRotation(const Matrix4x4& m, const Vector3& scale) {
+    Matrix4x4 rot;
+    if (scale.x > 1e-6f) { rot.m[0][0] = m.m[0][0]/scale.x; rot.m[0][1] = m.m[0][1]/scale.x; rot.m[0][2] = m.m[0][2]/scale.x; }
+    if (scale.y > 1e-6f) { rot.m[1][0] = m.m[1][0]/scale.y; rot.m[1][1] = m.m[1][1]/scale.y; rot.m[1][2] = m.m[1][2]/scale.y; }
+    if (scale.z > 1e-6f) { rot.m[2][0] = m.m[2][0]/scale.z; rot.m[2][1] = m.m[2][1]/scale.z; rot.m[2][2] = m.m[2][2]/scale.z; }
+    return Quaternion::FromMatrix(rot);
+}
+
+// ─── Transform Gizmo ─────────────────────────────────────────────────────────
+
+void EditorApp::DrawGizmo() {
+    if (m_vpW == 0 || m_vpH == 0) return;
+
+    // ── モード切り替えオーバーレイ（ビューポート左上） ──────────────────────
+    {
+        const float pad = 8.0f;
+        ImGui::SetNextWindowPos(ImVec2(static_cast<float>(m_vpX) + pad,
+                                       static_cast<float>(m_vpY) + pad),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.72f);
+        constexpr ImGuiWindowFlags kOvFlags =
+            ImGuiWindowFlags_NoDecoration      | ImGuiWindowFlags_AlwaysAutoResize  |
+            ImGuiWindowFlags_NoSavedSettings   | ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav             | ImGuiWindowFlags_NoMove            |
+            ImGuiWindowFlags_NoDocking         | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+        ImGui::Begin("##gizmo_mode", nullptr, kOvFlags);
+
+        auto ModeBtn = [&](const char* label, ImGuizmo::OPERATION op) {
+            bool active = (m_gizmoOp == op);
+            if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.878f, 0.482f, 0.224f, 1.0f));
+            if (ImGui::Button(label, ImVec2(52.0f, 0.0f))) m_gizmoOp = op;
+            if (active) ImGui::PopStyleColor();
+            ImGui::SameLine(0.0f, 2.0f);
+        };
+
+        ModeBtn("Move",   ImGuizmo::TRANSLATE);
+        ModeBtn("Rotate", ImGuizmo::ROTATE);
+        ModeBtn("Scale",  ImGuizmo::SCALE);
+
+        // Local / World トグル（Scaleはローカルのみ）
+        if (m_gizmoOp != ImGuizmo::SCALE) {
+            ImGui::SameLine(0.0f, 8.0f);
+            bool isWorld = (m_gizmoMode == ImGuizmo::WORLD);
+            if (isWorld) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+            if (ImGui::Button(isWorld ? "World" : "Local", ImVec2(46.0f, 0.0f)))
+                m_gizmoMode = isWorld ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+            if (isWorld) ImGui::PopStyleColor();
+        }
+
+        // Debug shapes toggle
+        ImGui::SameLine(0.0f, 12.0f);
+        bool shapesWasOn = m_showDebugShapes;
+        if (shapesWasOn) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.25f, 1.0f));
+        if (ImGui::Button("Shapes", ImVec2(52.0f, 0.0f)))
+            m_showDebugShapes = !m_showDebugShapes;
+        if (shapesWasOn) ImGui::PopStyleColor();
+
+        ImGui::End();
+    }
+
+    Actor* sel = m_hierarchyPanel.GetSelectedActor();
+    if (!sel) { m_gizmoWasUsing = false; return; }
+    auto* tc = sel->GetComponent<TransformComponent>();
+    if (!tc) { m_gizmoWasUsing = false; return; }
+
+    // Disable while right-click camera drag is active
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        m_gizmoWasUsing = false;
+        return;
+    }
+
+    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    ImGuizmo::SetRect(
+        static_cast<float>(m_vpX), static_cast<float>(m_vpY),
+        static_cast<float>(m_vpW), static_cast<float>(m_vpH));
+    ImGuizmo::AllowAxisFlip(false);
+
+    // Our matrices are row-major; ImGuizmo expects column-major → transpose
+    Matrix4x4 viewT = m_view.GetTransposed();
+    Matrix4x4 projT = m_proj.GetTransposed();
+    Matrix4x4 world  = tc->GetWorldMatrix();
+    Matrix4x4 worldT = world.GetTransposed();
+
+    bool wasUsing = ImGuizmo::IsUsing();
+
+    // Capture state when the user starts dragging
+    if (!wasUsing && ImGuizmo::IsOver()) {
+        m_gizmoCaptured = { tc->Position, tc->Rotation, tc->Scale };
+    }
+
+    bool manipulated = ImGuizmo::Manipulate(
+        viewT.v, projT.v,
+        m_gizmoOp, m_gizmoMode,
+        worldT.v);
+
+    if (manipulated) {
+        // Transpose back to row-major
+        Matrix4x4 newWorld = worldT.GetTransposed();
+
+        Vector3    newPos   = Vector3(newWorld.m[0][3], newWorld.m[1][3], newWorld.m[2][3]);
+        Vector3    newScale = ExtractScale(newWorld);
+        Quaternion newRot   = ExtractRotation(newWorld, newScale);
+
+        // Convert world → local when actor has a parent
+        if (sel->GetParent()) {
+            auto* parentTc = sel->GetParent()->GetComponent<TransformComponent>();
+            if (parentTc) {
+                Matrix4x4 localMat = parentTc->GetWorldMatrix().GetInverse() * newWorld;
+                newPos   = Vector3(localMat.m[0][3], localMat.m[1][3], localMat.m[2][3]);
+                newScale = ExtractScale(localMat);
+                newRot   = ExtractRotation(localMat, newScale);
+            }
+        }
+
+        tc->Position = newPos;
+        tc->Rotation = newRot;
+        tc->Scale    = newScale;
+        m_inspectorPanel.InvalidateEulerCache(sel->GetId());
+    }
+
+    // Push undo command when manipulation ends
+    bool isUsing = ImGuizmo::IsUsing();
+    if (wasUsing && !isUsing) {
+        TransformCommand::State newState = { tc->Position, tc->Rotation, tc->Scale };
+        // Push without re-Execute: wrap so Execute() is a no-op on first call
+        struct GizmoCmd : public ICommand {
+            TransformComponent*     tc;
+            TransformCommand::State before, after;
+            bool firstExec = true;
+            GizmoCmd(TransformComponent* t, const TransformCommand::State& b, const TransformCommand::State& a)
+                : tc(t), before(b), after(a) {}
+            void Execute() override {
+                if (firstExec) { firstExec = false; return; } // state already applied
+                if (tc) { tc->Position = after.position; tc->Rotation = after.rotation; tc->Scale = after.scale; }
+            }
+            void Undo() override {
+                if (tc) { tc->Position = before.position; tc->Rotation = before.rotation; tc->Scale = before.scale; }
+            }
+        };
+        m_cmdHistory.Push(std::make_unique<GizmoCmd>(tc, m_gizmoCaptured, newState));
+    }
+    m_gizmoWasUsing = isUsing;
+}
+
+// ─── Debug Shape Overlay ──────────────────────────────────────────────────────
+
+void EditorApp::DrawDebugShapes() {
+    if (!m_scene || m_vpW == 0 || m_vpH == 0) return;
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    dl->PushClipRect(
+        ImVec2(static_cast<float>(m_vpX),           static_cast<float>(m_vpY)),
+        ImVec2(static_cast<float>(m_vpX + m_vpW),   static_cast<float>(m_vpY + m_vpH)),
+        true);
+
+    // Project world-space point → screen pixel. Returns false if behind camera.
+    auto Project = [&](const Vector3& p, float& sx, float& sy) -> bool {
+        Vector4 clip = m_viewProj * Vector4(p.x, p.y, p.z, 1.0f);
+        if (clip.w <= 0.001f) return false;
+        float ndcX =  clip.x / clip.w;
+        float ndcY = -clip.y / clip.w;
+        sx = (ndcX * 0.5f + 0.5f) * static_cast<float>(m_vpW) + static_cast<float>(m_vpX);
+        sy = (ndcY * 0.5f + 0.5f) * static_cast<float>(m_vpH) + static_cast<float>(m_vpY);
+        return true;
+    };
+
+    auto Line = [&](const Vector3& a, const Vector3& b, ImU32 col, float t = 1.0f) {
+        float ax, ay, bx, by;
+        if (Project(a, ax, ay) && Project(b, bx, by))
+            dl->AddLine(ImVec2(ax, ay), ImVec2(bx, by), col, t);
+    };
+
+    // AABB wireframe (12 edges)
+    auto BoxWire = [&](const Vector3& c, const Vector3& h, ImU32 col) {
+        Vector3 v[8];
+        for (int i = 0; i < 8; ++i)
+            v[i] = c + Vector3((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z);
+        constexpr int E[12][2] = {
+            {0,1},{2,3},{4,5},{6,7}, {0,2},{1,3},{4,6},{5,7}, {0,4},{1,5},{2,6},{3,7}
+        };
+        for (auto& e : E) Line(v[e[0]], v[e[1]], col);
+    };
+
+    // Circle in world-space on plane defined by two orthogonal axis vectors
+    auto Circle = [&](const Vector3& center, float r,
+                      const Vector3& axA, const Vector3& axB,
+                      ImU32 col, int segs = 24) {
+        constexpr float TAU = 6.28318530f;
+        Vector3 prev = center + axA * r;
+        for (int i = 1; i <= segs; ++i) {
+            float a = (float)i / segs * TAU;
+            Vector3 cur = center + axA * (r * std::cosf(a)) + axB * (r * std::sinf(a));
+            Line(prev, cur, col);
+            prev = cur;
+        }
+    };
+
+    for (auto& actorPtr : m_scene->GetActors()) {
+        auto* tc = actorPtr->GetComponent<TransformComponent>();
+        if (!tc) continue;
+
+        // ── Collider ──────────────────────────────────────────────────────
+        if (auto* col = actorPtr->GetComponent<ColliderComponent>()) {
+            ImU32 cc = col->IsTrigger ? IM_COL32(0, 220, 220, 200) : IM_COL32(90, 220, 90, 200);
+            Vector3 center = tc->Position + col->Offset;
+
+            switch (col->Shape) {
+            case ColliderShape::AABB:
+                BoxWire(center, col->HalfExtents, cc);
+                break;
+            case ColliderShape::Sphere:
+                Circle(center, col->Radius, {1,0,0}, {0,1,0}, cc);
+                Circle(center, col->Radius, {1,0,0}, {0,0,1}, cc);
+                Circle(center, col->Radius, {0,1,0}, {0,0,1}, cc);
+                break;
+            case ColliderShape::Capsule: {
+                Matrix4x4 rot = tc->Rotation.ToMatrix();
+                Vector3 up   (rot.m[0][1], rot.m[1][1], rot.m[2][1]);
+                Vector3 right(rot.m[0][0], rot.m[1][0], rot.m[2][0]);
+                Vector3 fwd  (rot.m[0][2], rot.m[1][2], rot.m[2][2]);
+                Vector3 base = center - up * col->HalfHeight;
+                Vector3 tip  = center + up * col->HalfHeight;
+                Circle(base, col->Radius, right, fwd, cc);
+                Circle(tip,  col->Radius, right, fwd, cc);
+                Line(base + right * col->Radius, tip + right * col->Radius, cc);
+                Line(base - right * col->Radius, tip - right * col->Radius, cc);
+                Line(base + fwd   * col->Radius, tip + fwd   * col->Radius, cc);
+                Line(base - fwd   * col->Radius, tip - fwd   * col->Radius, cc);
+                break;
+            }
+            }
+        }
+
+        // ── Light ─────────────────────────────────────────────────────────
+        if (auto* lc = actorPtr->GetComponent<LightComponent>()) {
+            Vector3 pos = tc->Position;
+            ImU32 lc32  = IM_COL32(255, 220, 60, 210);
+
+            // Use the same row-based extraction as LightingPass.cpp:243
+            // so the arrow matches the actual rendered light direction.
+            Matrix4x4 rot = tc->Rotation.ToMatrix();
+            Vector3 fwd  (rot.m[2][0], rot.m[2][1], rot.m[2][2]);
+            Vector3 right(rot.m[0][0], rot.m[0][1], rot.m[0][2]);
+            Vector3 up   (rot.m[1][0], rot.m[1][1], rot.m[1][2]);
+
+            switch (lc->Type) {
+            case LightType::Point:
+                Circle(pos, lc->Range, {1,0,0}, {0,1,0}, lc32, 32);
+                Circle(pos, lc->Range, {1,0,0}, {0,0,1}, lc32, 32);
+                Circle(pos, lc->Range, {0,1,0}, {0,0,1}, lc32, 32);
+                break;
+
+            case LightType::Directional: {
+                // Arrow + 4-point arrowhead
+                Vector3 tip = pos + fwd * 1.5f;
+                Line(pos, tip, lc32, 2.0f);
+                float hs = 0.2f;
+                Line(tip, tip - fwd * 0.4f + right * hs, lc32, 2.0f);
+                Line(tip, tip - fwd * 0.4f - right * hs, lc32, 2.0f);
+                Line(tip, tip - fwd * 0.4f + up    * hs, lc32, 2.0f);
+                Line(tip, tip - fwd * 0.4f - up    * hs, lc32, 2.0f);
+                break;
+            }
+
+            case LightType::Spot: {
+                float halfRad = lc->SpotAngle * 0.5f * (3.14159265f / 180.0f);
+                float cr      = lc->Range * std::tanf(halfRad);
+                Vector3 cEnd  = pos + fwd * lc->Range;
+                Circle(cEnd, cr, right, up, lc32, 24);
+                Line(pos, cEnd + right * cr, lc32);
+                Line(pos, cEnd - right * cr, lc32);
+                Line(pos, cEnd + up    * cr, lc32);
+                Line(pos, cEnd - up    * cr, lc32);
+                break;
+            }
+            }
+        }
+    }
+
+    dl->PopClipRect();
+}
+
+// ─── Camera Gizmos ───────────────────────────────────────────────────────────
 
 void EditorApp::DrawCameraGizmos() {
     if (!m_scene || m_vpW == 0 || m_vpH == 0) return;
@@ -457,6 +766,8 @@ void EditorApp::DrawCameraGizmos() {
 }
 
 void EditorApp::Render(ID3D12GraphicsCommandList* cmdList) {
+    DrawGizmo();
+    if (m_showDebugShapes) DrawDebugShapes();
     DrawCameraGizmos();
     if (m_sceneRenderer)
         m_renderPassPanel.Draw(m_sceneRenderer->GetRenderGraph());

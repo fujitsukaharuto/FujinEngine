@@ -19,11 +19,17 @@
     <Filter Include="Engine\Asset">
       <UniqueIdentifier>{c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Engine\Physics">
+      <UniqueIdentifier>{f1e2d3c4-b5a6-4f7e-8d9c-0b1a2c3d4e5f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Editor">
       <UniqueIdentifier>{a8b9c0d1-e2f3-4a5b-6c7d-8e9f0a1b2c3d}</UniqueIdentifier>
     </Filter>
     <Filter Include="Editor\Panels">
       <UniqueIdentifier>{d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Editor\Command">
+      <UniqueIdentifier>{b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resource">
       <UniqueIdentifier>{e4f5a6b7-c8d9-4e0f-1a2b-3c4d5e6f7a8b}</UniqueIdentifier>
@@ -213,6 +219,9 @@
     <ClCompile Include="Editor\EditorApp.cpp">
       <Filter>Editor</Filter>
     </ClCompile>
+    <ClCompile Include="Editor\Command\TransformCommand.cpp">
+      <Filter>Editor\Command</Filter>
+    </ClCompile>
     <ClCompile Include="Editor\Panels\SceneHierarchyPanel.cpp">
       <Filter>Editor\Panels</Filter>
     </ClCompile>
@@ -242,6 +251,15 @@
     </ClCompile>
     <ClCompile Include="Engine\Core\ParticleComponent.cpp">
       <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\RigidbodyComponent.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\ColliderComponent.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Physics\PhysicsWorld.cpp">
+      <Filter>Engine\Physics</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Renderer\PostProcess\PostProcessPass.cpp">
       <Filter>Engine\Renderer\PostProcess</Filter>
@@ -356,6 +374,15 @@
     <ClInclude Include="Editor\EditorApp.h">
       <Filter>Editor</Filter>
     </ClInclude>
+    <ClInclude Include="Editor\Command\ICommand.h">
+      <Filter>Editor\Command</Filter>
+    </ClInclude>
+    <ClInclude Include="Editor\Command\CommandHistory.h">
+      <Filter>Editor\Command</Filter>
+    </ClInclude>
+    <ClInclude Include="Editor\Command\TransformCommand.h">
+      <Filter>Editor\Command</Filter>
+    </ClInclude>
     <ClInclude Include="Editor\Panels\SceneHierarchyPanel.h">
       <Filter>Editor\Panels</Filter>
     </ClInclude>
@@ -382,6 +409,15 @@
     </ClInclude>
     <ClInclude Include="Engine\Renderer\Effect\ParticlePass.h">
       <Filter>Engine\Renderer\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\RigidbodyComponent.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\ColliderComponent.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Physics\PhysicsWorld.h">
+      <Filter>Engine\Physics</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\ParticleComponent.h">
       <Filter>Engine\Core</Filter>

@@ -11,6 +11,7 @@
 #include "Engine/Asset/SceneSerializer.h"
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Renderer/SceneRenderer.h"
+#include "Engine/Physics/PhysicsWorld.h"
 #include "Engine/Math/Math.h"
 #include "Editor/EditorApp.h"
 
@@ -19,6 +20,7 @@ static Fujin::GraphicsDevice g_gfx;
 static Fujin::SceneManager   g_scene;
 static Fujin::EditorApp      g_editor;
 static Fujin::SceneRenderer  g_sceneRenderer;
+static Fujin::PhysicsWorld   g_physics;
 
 static void SetupTestScene() {
     // Directional Light
@@ -157,6 +159,10 @@ static void Run() {
 
         g_gfx.BeginFrame();
 
+        // Physics step (only while playing)
+        if (g_editor.IsPlaying())
+            g_physics.Step(g_scene, dt);
+
         // BeginFrame first: starts ImGui frame + updates debug camera from input
         g_editor.BeginFrame(dt);
 
@@ -176,8 +182,8 @@ static void Run() {
             g_gfx.GetCurrentFrameIndex(),
             vpX, vpY, vpW, vpH);
 
-        // Pass viewProj to editor for camera gizmo projection
-        g_editor.SetViewProj(g_sceneRenderer.GetLastViewProj());
+        // Pass view/proj to editor for gizmo and camera gizmo projection
+        g_editor.SetViewAndProj(g_sceneRenderer.GetLastView(), g_sceneRenderer.GetLastProj());
 
         g_editor.Render(g_gfx.GetCommandList());
 

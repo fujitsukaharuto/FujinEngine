@@ -10,7 +10,10 @@
 #include "Editor/Panels/RenderPassEditorPanel.h"
 #include "Editor/Panels/EffectEditorPanel.h"
 #include "Editor/Panels/PostProcessPanel.h"
+#include "Editor/Command/CommandHistory.h"
+#include "Editor/Command/TransformCommand.h"
 #include "imgui.h"
+#include "ImGuizmo.h"
 
 namespace Fujin {
 
@@ -32,8 +35,14 @@ public:
 
     Vector3 GetDebugCameraPos()    const { return m_debugCamera.GetPosition(); }
     Vector3 GetDebugCameraTarget() const { return m_debugCamera.GetTarget(); }
+    bool    IsPlaying()            const { return m_isPlaying; }
 
     void SetViewProj(const Matrix4x4& vp) { m_viewProj = vp; }
+    void SetViewAndProj(const Matrix4x4& view, const Matrix4x4& proj) {
+        m_view     = view;
+        m_proj     = proj;
+        m_viewProj = proj * view;
+    }
 
 private:
     void ApplyUE5Theme();
@@ -41,7 +50,12 @@ private:
     void DrawToolbar();
     void DrawFPSOverlay();
     void DrawCameraGizmos();
+    void DrawGizmo();
+    void DrawDebugShapes();
     bool IsViewportHovered() const;
+
+    static Quaternion ExtractRotation(const Matrix4x4& m, const Vector3& scale);
+    static Vector3    ExtractScale(const Matrix4x4& m);
 
     SceneManager*        m_scene          = nullptr;
     SceneRenderer*       m_sceneRenderer  = nullptr;
@@ -54,13 +68,23 @@ private:
 
     DebugCamera  m_debugCamera;
     Matrix4x4    m_viewProj;
+    Matrix4x4    m_view;
+    Matrix4x4    m_proj;
+
+    ImGuizmo::OPERATION     m_gizmoOp       = ImGuizmo::TRANSLATE;
+    ImGuizmo::MODE          m_gizmoMode     = ImGuizmo::WORLD;
+    bool                    m_gizmoWasUsing = false;
+    TransformCommand::State m_gizmoCaptured;
+
+    CommandHistory m_cmdHistory;
 
     char       m_scenePath[260] = "Resources/Scenes/test.scene.json";
     ImGuiID    m_dockspaceId   = 0;
     uint32_t   m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0;
-    bool       m_isPlaying       = false;
-    bool       m_isPaused        = false;
-    bool       m_layoutBuilt     = false;  // rebuilt every startup
+    bool       m_isPlaying        = false;
+    bool       m_isPaused         = false;
+    bool       m_layoutBuilt      = false;
+    bool       m_showDebugShapes  = true;
     bool       m_effectEditOpen  = false;  // large effect-editor window is visible
     Actor*     m_effectEditActor = nullptr;
     float      m_dt            = 0.0f;

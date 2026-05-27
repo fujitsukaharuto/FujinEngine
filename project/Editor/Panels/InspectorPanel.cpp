@@ -6,6 +6,8 @@
 #include "Engine/Core/LightComponent.h"
 #include "Engine/Core/CameraComponent.h"
 #include "Engine/Core/ParticleComponent.h"
+#include "Engine/Core/RigidbodyComponent.h"
+#include "Engine/Core/ColliderComponent.h"
 #include "Engine/Renderer/Material/MaterialManager.h"
 #include "Engine/Math/Math.h"
 #include "imgui.h"
@@ -32,6 +34,8 @@ void InspectorPanel::Draw(Actor* actor) {
     DrawLight(actor);
     DrawCamera(actor);
     DrawParticle(actor);
+    DrawRigidbody(actor);
+    DrawCollider(actor);
 
     // Add Component popup
     ImGui::Separator();
@@ -50,6 +54,10 @@ void InspectorPanel::Draw(Actor* actor) {
             actor->AddComponent<CameraComponent>();
         if (!actor->HasComponent<ParticleComponent>() && ImGui::MenuItem("Particle"))
             actor->AddComponent<ParticleComponent>();
+        if (!actor->HasComponent<RigidbodyComponent>() && ImGui::MenuItem("Rigidbody"))
+            actor->AddComponent<RigidbodyComponent>();
+        if (!actor->HasComponent<ColliderComponent>() && ImGui::MenuItem("Collider"))
+            actor->AddComponent<ColliderComponent>();
         ImGui::EndPopup();
     }
 
@@ -61,11 +69,28 @@ void InspectorPanel::DrawTransform(Actor* actor) {
     if (!t) return;
     if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
-    ImGui::DragFloat3("Position", &t->Position.x, 0.1f);
-
-    // Use cached Euler to avoid Quaternion→Euler round-trip drift every frame.
-    // Cache is initialized from the quaternion the first time each actor is seen.
     uint64_t actorId = actor->GetId();
+
+    auto CaptureIfNeeded = [&]() {
+        if (m_cmdHistory && !m_transformCaptured) {
+            m_capturedTransform = { t->Position, t->Rotation, t->Scale };
+            m_transformCaptured = true;
+        }
+    };
+    auto CommitIfDone = [&]() {
+        if (m_cmdHistory && m_transformCaptured) {
+            m_cmdHistory->Push(std::make_unique<TransformCommand>(
+                t, m_capturedTransform, TransformCommand::State{ t->Position, t->Rotation, t->Scale }));
+            m_transformCaptured = false;
+        }
+    };
+
+    // Position
+    ImGui::DragFloat3("Position", &t->Position.x, 0.1f);
+    if (ImGui::IsItemActivated())           CaptureIfNeeded();
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitIfDone();
+
+    // Rotation — use cached Euler to avoid Quaternion→Euler round-trip drift every frame.
     auto it = m_eulerCache.find(actorId);
     if (it == m_eulerCache.end()) {
         auto& q = t->Rotation;
@@ -88,19 +113,23 @@ void InspectorPanel::DrawTransform(Actor* actor) {
 
     auto& cached = it->second;
     float euler[3] = { cached[0], cached[1], cached[2] };
+    if (ImGui::IsItemActivated())           CaptureIfNeeded(); // won't fire here, but kept for symmetry
     if (ImGui::DragFloat3("Rotation", euler, 0.5f)) {
         cached[0] = euler[0];
         cached[1] = euler[1];
         cached[2] = euler[2];
-        // FromEuler(pitch,yaw,roll) maps: roll→X軸, pitch→Y軸, yaw→Z軸
-        // なので euler[X,Y,Z] → FromEuler(Y, Z, X) で正しい軸に対応する
         t->Rotation = Quaternion::FromEuler(
-            Math::ToRadians(euler[1]),   // pitch → Y rotation
-            Math::ToRadians(euler[2]),   // yaw   → Z rotation
-            Math::ToRadians(euler[0]));  // roll  → X rotation
+            Math::ToRadians(euler[1]),
+            Math::ToRadians(euler[2]),
+            Math::ToRadians(euler[0]));
     }
+    if (ImGui::IsItemActivated())           CaptureIfNeeded();
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitIfDone();
 
+    // Scale
     ImGui::DragFloat3("Scale", &t->Scale.x, 0.05f, 0.001f, 1000.0f);
+    if (ImGui::IsItemActivated())           CaptureIfNeeded();
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitIfDone();
 }
 
 void InspectorPanel::DrawMesh(Actor* actor) {
@@ -290,6 +319,48 @@ void InspectorPanel::DrawParticle(Actor* actor) {
         if (ImGui::Button("Edit Effect", ImVec2(-1.0f, 0.0f)))
             m_onEditEffect(actor);
         ImGui::PopStyleColor(3);
+    }
+}
+
+void InspectorPanel::DrawRigidbody(Actor* actor) {
+    auto* rb = actor->GetComponent<RigidbodyComponent>();
+    if (!rb) return;
+    if (!ImGui::CollapsingHeader("Rigidbody Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::DragFloat("Mass",           &rb->Mass,          0.01f, 0.001f, 10000.0f);
+    ImGui::DragFloat("Restitution",    &rb->Restitution,   0.01f, 0.0f,   1.0f);
+    ImGui::DragFloat("Friction",       &rb->Friction,      0.01f, 0.0f,   1.0f);
+    ImGui::DragFloat("Linear Damping", &rb->LinearDamping, 0.001f,0.0f,   1.0f);
+    ImGui::Checkbox("Kinematic", &rb->IsKinematic);
+    ImGui::SameLine();
+    ImGui::Checkbox("Gravity",   &rb->UseGravity);
+    ImGui::TextDisabled("Velocity: %.2f %.2f %.2f", rb->Velocity.x, rb->Velocity.y, rb->Velocity.z);
+}
+
+void InspectorPanel::DrawCollider(Actor* actor) {
+    auto* col = actor->GetComponent<ColliderComponent>();
+    if (!col) return;
+    if (!ImGui::CollapsingHeader("Collider Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    const char* shapes[] = { "Sphere", "AABB", "Capsule" };
+    int shapeIdx = static_cast<int>(col->Shape);
+    if (ImGui::Combo("Shape", &shapeIdx, shapes, 3))
+        col->Shape = static_cast<ColliderShape>(shapeIdx);
+
+    ImGui::DragFloat3("Offset", &col->Offset.x, 0.01f);
+    ImGui::Checkbox("Trigger", &col->IsTrigger);
+
+    switch (col->Shape) {
+    case ColliderShape::Sphere:
+        ImGui::DragFloat("Radius", &col->Radius, 0.01f, 0.001f, 1000.0f);
+        break;
+    case ColliderShape::AABB:
+        ImGui::DragFloat3("Half Extents", &col->HalfExtents.x, 0.01f, 0.001f, 1000.0f);
+        break;
+    case ColliderShape::Capsule:
+        ImGui::DragFloat("Radius",      &col->Radius,     0.01f, 0.001f, 1000.0f);
+        ImGui::DragFloat("Half Height", &col->HalfHeight, 0.01f, 0.001f, 1000.0f);
+        break;
     }
 }
 
