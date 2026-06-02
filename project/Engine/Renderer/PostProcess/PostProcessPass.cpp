@@ -79,6 +79,8 @@ bool PostProcessPass::Initialize(GraphicsDevice& gfx, uint32_t width, uint32_t h
     if (!CreateSSAOResources(gfx)) return false;
     if (!CreateBloomResources(gfx)) return false;
     if (!CreateTonemapResources(gfx)) return false;
+    if (!CreateTAAResources(gfx))     return false;
+    if (!CreateSSRResources(gfx))     return false;
     return true;
 }
 
@@ -86,6 +88,9 @@ void PostProcessPass::ReleaseResolutionResources() {
     m_hdrRT.Reset();
     m_ssaoRT.Reset(); m_ssaoBlurRT.Reset();
     m_bloomA.Reset(); m_bloomB.Reset();
+    m_taaTex[0].Reset(); m_taaTex[1].Reset();
+    m_taaHistoryValid = false;
+    m_ssrTex.Reset();
 }
 
 void PostProcessPass::Resize(GraphicsDevice& gfx, uint32_t width, uint32_t height) {
@@ -97,6 +102,8 @@ void PostProcessPass::Resize(GraphicsDevice& gfx, uint32_t width, uint32_t heigh
     bool hdrOk  = CreateHDRRT(gfx);
     bool ssaoOk = CreateSSAOResources(gfx);
     bool blmOk  = CreateBloomResources(gfx);
+    CreateTAAResources(gfx);
+    CreateSSRResources(gfx);
     if (!hdrOk || !ssaoOk || !blmOk) {
         char buf[128];
         snprintf(buf, sizeof(buf), "[PostProcess] Resize failed: hdr=%d ssao=%d bloom=%d\n",
@@ -111,14 +118,20 @@ void PostProcessPass::Shutdown() {
         if (m_ssaoCBMapped[i])    { m_ssaoCB[i]->Unmap(0, nullptr);    m_ssaoCBMapped[i] = nullptr; }
         if (m_bloomCBMapped[i])   { m_bloomCB[i]->Unmap(0, nullptr);   m_bloomCBMapped[i] = nullptr; }
         if (m_tonemapCBMapped[i]) { m_tonemapCB[i]->Unmap(0, nullptr); m_tonemapCBMapped[i] = nullptr; }
+        if (m_taaCBMapped[i])     { m_taaCB[i]->Unmap(0, nullptr);     m_taaCBMapped[i] = nullptr; }
+        if (m_ssrCBMapped[i])     { m_ssrCB[i]->Unmap(0, nullptr);     m_ssrCBMapped[i] = nullptr; }
         m_ssaoCB[i].Reset();
         m_bloomCB[i].Reset();
         m_tonemapCB[i].Reset();
+        m_taaCB[i].Reset();
+        m_ssrCB[i].Reset();
     }
     m_ssaoPSO.Reset();  m_ssaoRS.Reset();
     m_ssaoBlurPSO.Reset(); m_ssaoBlurRS.Reset();
     m_bloomDownPSO.Reset(); m_bloomUpPSO.Reset(); m_bloomRS.Reset();
     m_tonemapPSO.Reset(); m_tonemapRS.Reset();
+    m_taaPSO.Reset(); m_taaRS.Reset();
+    m_ssrPSO.Reset(); m_ssrRS.Reset();
     ReleaseResolutionResources();
     m_hdrRTVHeap.Reset();
 }
@@ -433,24 +446,33 @@ void PostProcessPass::ExecuteSSAO(ID3D12GraphicsCommandList* cmd,
                                     const GBuffer& gbuffer,
                                     const Matrix4x4& viewProj,
                                     const Matrix4x4& invViewProj,
-                                    uint32_t frameIndex) {
+                                    uint32_t frameIndex,
+                                    uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
     if (!m_ssaoRT || !m_ssaoBlurRT) {
         OutputDebugStringA("[PostProcess] ExecuteSSAO skipped: SSAO resources null\n");
         return;
     }
 
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
     uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
 
-    // Upload SSAO CB (InvViewProj, ViewProj, radius, bias)
+    // Upload SSAO CB (InvViewProj, ViewProj, radius, bias, viewport)
     struct SSAOCB {
         float invVP[16];
         float vp[16];
         float radius, bias, _p0, _p1;
+        float viewport[4];
+        float rtSize[2];
+        float _p2[2];
     };
     SSAOCB cb = {};
     memcpy(cb.invVP, invViewProj.v, 64);
     memcpy(cb.vp,    viewProj.v,    64);
     cb.radius = 0.5f; cb.bias = 0.025f;
+    cb.viewport[0] = (float)vpX; cb.viewport[1] = (float)vpY;
+    cb.viewport[2] = (float)vpW; cb.viewport[3] = (float)vpH;
+    cb.rtSize[0]   = (float)m_width; cb.rtSize[1] = (float)m_height;
     memcpy(m_ssaoCBMapped[fi], &cb, sizeof(cb));
 
     // Transition SSAO RT to UAV (was NON_PIXEL after last frame's blur read)
@@ -492,6 +514,304 @@ void PostProcessPass::ExecuteSSAO(ID3D12GraphicsCommandList* cmd,
     Barrier(cmd, m_ssaoBlurRT.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_ssaoBlurState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+}
+
+// ─── TAA ──────────────────────────────────────────────────────────────────────
+
+bool PostProcessPass::CreateTAAResources(GraphicsDevice& gfx) {
+    ID3D12Device* dev = gfx.GetDevice();
+    static constexpr DXGI_FORMAT TAA_FMT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    for (int i = 0; i < 2; ++i) {
+        m_taaTex[i] = CreateDefaultTex2D(dev, TAA_FMT, m_width, m_height,
+                                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if (!m_taaTex[i]) return false;
+        m_taaState[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    m_taaHistoryValid = false;
+    m_taaWriteIndex   = 0;
+
+    if (m_taaSRVSlot[0] == 0) {
+        for (int i = 0; i < 2; ++i) {
+            m_taaUAVSlot[i] = gfx.AllocateSRVSlot();
+            m_taaSRVSlot[i] = gfx.AllocateSRVSlot();
+        }
+    }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavd = {};
+    uavd.Format = TAA_FMT; uavd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvd = {};
+    srvd.Format = TAA_FMT; srvd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvd.Texture2D.MipLevels = 1;
+    for (int i = 0; i < 2; ++i) {
+        dev->CreateUnorderedAccessView(m_taaTex[i].Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_taaUAVSlot[i]));
+        dev->CreateShaderResourceView (m_taaTex[i].Get(), &srvd,         gfx.GetSRVCPUHandle(m_taaSRVSlot[i]));
+    }
+
+    if (!m_taaRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[5] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 current
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 history
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 }; // t2 depth
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, 0 }; // t3 velocity
+        ranges[4] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 output
+        D3D12_ROOT_PARAMETER params[6] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 5; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 6; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_taaRS)))) return false;
+
+        auto taaCS = LoadOrCompileShader(L"Resource/Shaders/TAA.CS.hlsl", L"cs_6_0");
+        if (!taaCS) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_taaRS.Get();
+        cpd.CS = { taaCS->GetBufferPointer(), taaCS->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_taaPSO)))) return false;
+    }
+    if (!m_taaCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+            m_taaCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_taaCBMapped[i]);
+    }
+    return true;
+}
+
+void PostProcessPass::ExecuteTAA(ID3D12GraphicsCommandList* cmd,
+                                  GraphicsDevice& gfx,
+                                  uint32_t frameIndex,
+                                  ID3D12Resource* depthResource,
+                                  uint32_t depthSRVSlot,
+                                  ID3D12Resource* velocityResource,
+                                  uint32_t velocitySRVSlot,
+                                  const Matrix4x4& invViewProjCur,
+                                  const Matrix4x4& viewProjPrev,
+                                  float jitterDeltaU, float jitterDeltaV,
+                                  uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!TaaEnabled || !m_taaTex[0] || !m_taaTex[1] || !m_taaPSO || !depthResource || !velocityResource) return;
+
+    uint32_t fi   = frameIndex % NUM_FRAMES_IN_FLIGHT;
+    uint32_t dst  = m_taaWriteIndex;     // this frame's output
+    uint32_t hist = 1u - dst;            // last frame's output = history
+
+    // Full-RT fallback if no sub-viewport was supplied.
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
+    struct TAACB {
+        float invVPcur[16];
+        float vpPrev[16];
+        float viewport[4];   // x, y, w, h
+        float rtW, rtH, blend, valid;
+        float jitterDU, jitterDV, pad0, pad1;
+    };
+    TAACB cb = {};
+    memcpy(cb.invVPcur, invViewProjCur.v, 64);
+    memcpy(cb.vpPrev,   viewProjPrev.v,   64);
+    cb.viewport[0] = (float)vpX; cb.viewport[1] = (float)vpY;
+    cb.viewport[2] = (float)vpW; cb.viewport[3] = (float)vpH;
+    cb.rtW = (float)m_width; cb.rtH = (float)m_height;
+    cb.blend  = TaaHistoryBlend;
+    cb.valid  = m_taaHistoryValid ? 1.0f : 0.0f;
+    cb.jitterDU = jitterDeltaU; cb.jitterDV = jitterDeltaV;
+    memcpy(m_taaCBMapped[fi], &cb, sizeof(cb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    // States: HDR → SRV read, depth → SRV read, history → SRV, output → UAV.
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, velocityResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, m_taaTex[hist].Get(), m_taaState[hist], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_taaState[hist] = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, m_taaTex[dst].Get(), m_taaState[dst], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_taaState[dst] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    cmd->SetComputeRootSignature(m_taaRS.Get());
+    cmd->SetPipelineState(m_taaPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_taaCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(m_taaSRVSlot[hist]));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(velocitySRVSlot));
+    cmd->SetComputeRootDescriptorTable(5, gfx.GetSRVGPUHandle(m_taaUAVSlot[dst]));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_taaTex[dst].Get());
+
+    // Copy the resolved result back into the HDR RT so bloom/tonemap run unchanged.
+    Barrier(cmd, m_taaTex[dst].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    m_taaState[dst] = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_hdrState = D3D12_RESOURCE_STATE_COPY_DEST;
+    cmd->CopyResource(m_hdrRT.Get(), m_taaTex[dst].Get());
+    Barrier(cmd, m_hdrRT.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    // Restore depth + velocity for the rest of the frame / next frame's RenderGraph tracker.
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    Barrier(cmd, velocityResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    m_taaWriteIndex   = hist;     // next frame writes to the texture we just used as history
+    m_taaHistoryValid = true;
+}
+
+// ─── SSR ────────────────────────────────────────────────────────────────────────
+
+bool PostProcessPass::CreateSSRResources(GraphicsDevice& gfx) {
+    ID3D12Device* dev = gfx.GetDevice();
+    static constexpr DXGI_FORMAT FMT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    m_ssrTex = CreateDefaultTex2D(dev, FMT, m_width, m_height,
+                                  D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                  D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (!m_ssrTex) return false;
+    m_ssrState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    if (m_ssrSRVSlot == 0) { m_ssrUAVSlot = gfx.AllocateSRVSlot(); m_ssrSRVSlot = gfx.AllocateSRVSlot(); }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavd = {}; uavd.Format = FMT; uavd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvd = {}; srvd.Format = FMT; srvd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; srvd.Texture2D.MipLevels = 1;
+    dev->CreateUnorderedAccessView(m_ssrTex.Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_ssrUAVSlot));
+    dev->CreateShaderResourceView (m_ssrTex.Get(), &srvd,         gfx.GetSRVCPUHandle(m_ssrSRVSlot));
+
+    if (!m_ssrRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[4] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 scene HDR
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 depth
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 }; // t2 normal
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 output
+        D3D12_ROOT_PARAMETER params[5] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 4; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 5; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_ssrRS)))) return false;
+
+        auto ssrCS = LoadOrCompileShader(L"Resource/Shaders/SSR.CS.hlsl", L"cs_6_0");
+        if (!ssrCS) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_ssrRS.Get();
+        cpd.CS = { ssrCS->GetBufferPointer(), ssrCS->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_ssrPSO)))) return false;
+    }
+    if (!m_ssrCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+            m_ssrCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ssrCBMapped[i]);
+    }
+    return true;
+}
+
+void PostProcessPass::ExecuteSSR(ID3D12GraphicsCommandList* cmd,
+                                  GraphicsDevice& gfx,
+                                  const GBuffer& gbuffer,
+                                  ID3D12Resource* depthResource,
+                                  uint32_t depthSRVSlot,
+                                  const Matrix4x4& viewProj,
+                                  const Matrix4x4& invViewProj,
+                                  const Vector3& cameraPos,
+                                  uint32_t frameIndex,
+                                  uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!SsrEnabled || !m_ssrTex || !m_ssrPSO || !depthResource) return;
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
+    uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
+
+    struct SSRCB {
+        float invVP[16]; float vp[16];
+        float camPos[3]; float _p0;
+        float viewport[4];
+        float rtW, rtH, maxDist, thickness;
+        int   maxSteps; float stride, roughCut, intensity;
+    };
+    const float stride   = 0.25f;
+    const int   maxSteps = 48;
+    SSRCB cb = {};
+    memcpy(cb.invVP, invViewProj.v, 64);
+    memcpy(cb.vp,    viewProj.v,    64);
+    cb.camPos[0] = cameraPos.x; cb.camPos[1] = cameraPos.y; cb.camPos[2] = cameraPos.z;
+    cb.viewport[0] = (float)vpX; cb.viewport[1] = (float)vpY;
+    cb.viewport[2] = (float)vpW; cb.viewport[3] = (float)vpH;
+    cb.rtW = (float)m_width; cb.rtH = (float)m_height;
+    cb.maxDist = stride * maxSteps; cb.thickness = SsrThickness;
+    cb.maxSteps = maxSteps; cb.stride = stride;
+    cb.roughCut = SsrRoughnessCutoff; cb.intensity = SsrIntensity;
+    memcpy(m_ssrCBMapped[fi], &cb, sizeof(cb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    ID3D12Resource* normalRes = gbuffer.GetResource(1);
+    // Read states: HDR → SRV, depth → SRV, normal → SRV, output → UAV.
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, m_ssrTex.Get(), m_ssrState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_ssrState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    cmd->SetComputeRootSignature(m_ssrRS.Get());
+    cmd->SetPipelineState(m_ssrPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ssrCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(1)));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(m_ssrUAVSlot));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_ssrTex.Get());
+
+    // Copy the composited result back into the HDR RT so the rest of the chain is unchanged.
+    Barrier(cmd, m_ssrTex.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    m_ssrState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_hdrState = D3D12_RESOURCE_STATE_COPY_DEST;
+    cmd->CopyResource(m_hdrRT.Get(), m_ssrTex.Get());
+    Barrier(cmd, m_hdrRT.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    // Restore depth + normal for the rest of the frame / next frame's trackers.
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 // ─── ExecuteFinal ─────────────────────────────────────────────────────────────

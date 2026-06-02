@@ -29,6 +29,7 @@ void LightComponent::ToJson(nlohmann::json& j) const {
     j["intensity"] = Intensity;
     j["range"]     = Range;
     j["spotAngle"] = SpotAngle;
+    j["castShadows"] = CastShadows;
 }
 
 void LightComponent::FromJson(const nlohmann::json& j) {
@@ -40,6 +41,7 @@ void LightComponent::FromJson(const nlohmann::json& j) {
     Intensity = j.value("intensity", 1.0f);
     Range     = j.value("range",     10.0f);
     SpotAngle = j.value("spotAngle", 45.0f);
+    CastShadows = j.value("castShadows", false);
 }
 
 } // namespace Fujin

@@ -1,6 +1,10 @@
 #include <Windows.h>
 #include <chrono>
 #include <algorithm>
+#include <unordered_map>
+#include <cstdint>
+#include <string>
+#include <cmath>
 #include "Engine/Core/Win32Window.h"
 #include "Engine/Core/SceneManager.h"
 #include "Engine/Core/TransformComponent.h"
@@ -8,6 +12,9 @@
 #include "Engine/Core/LightComponent.h"
 #include "Engine/Core/AnimationComponent.h"
 #include "Engine/Core/ParticleComponent.h"
+#include "Engine/Core/ColliderComponent.h"
+#include "Engine/Core/RigidbodyComponent.h"
+#include "Engine/Core/RotatorComponent.h"
 #include "Engine/Asset/SceneSerializer.h"
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Renderer/SceneRenderer.h"
@@ -51,6 +58,8 @@ static void SetupTestScene() {
     auto* mc = cube->AddComponent<Fujin::MeshComponent>();
     mc->MeshPath     = "Resource/Meshes/cube.obj";
     mc->MaterialPath = "Resource/Materials/default.mat.json";
+    // Tick-layer demo: spins the cube (and its parented child orbits with it) while in Play.
+    cube->AddComponent<Fujin::RotatorComponent>()->DegreesPerSecond = 60.0f;
 
     // Child attached to Cube
     auto* child = g_scene.CreateActor("CubeChild");
@@ -67,6 +76,10 @@ static void SetupTestScene() {
     grndT->Scale    = Fujin::Vector3(20.0f, 1.0f, 20.0f);
     auto* grndM = ground->AddComponent<Fujin::MeshComponent>();
     grndM->MeshPath = "Resource/Meshes/cube.obj";
+    // Static floor collider so dropped bodies come to rest (box, no rigidbody = immovable).
+    auto* grndCol = ground->AddComponent<Fujin::ColliderComponent>();
+    grndCol->Shape   = Fujin::ColliderShape::AABB;
+    grndCol->Channel = Fujin::CollisionChannel::WorldStatic;
 
     // Run characters — 3 actors placed side by side with staggered phase offsets
     struct RunnerDesc { const char* name; float x; float offset; };
@@ -119,6 +132,125 @@ static void SetupTestScene() {
         gpuPC->AddEmitter(gpuFire);
     }
 
+    // ── OBB test: a TILTED BOX ramp with a sphere that rolls/slides down it ──
+    // Exercises oriented sphere-vs-box collision (a rotated box collider is now respected,
+    // instead of being treated as axis-aligned). Press Play and watch the ball follow the
+    // tilted surface down toward the floor. The ramp is static (no RigidbodyComponent).
+    auto* ramp = g_scene.CreateActor("Ramp");
+    auto* rmpT = ramp->AddComponent<Fujin::TransformComponent>();
+    rmpT->Position = Fujin::Vector3(6.0f, 1.0f, 8.0f);
+    rmpT->Rotation = Fujin::Quaternion::FromAxisAngle(Fujin::Vector3(0, 0, 1), Fujin::Math::ToRadians(25.0f));
+    rmpT->Scale    = Fujin::Vector3(5.0f, 0.4f, 3.0f);   // wide thin slab
+    auto* rmpM = ramp->AddComponent<Fujin::MeshComponent>();
+    rmpM->MeshPath     = "Resource/Meshes/cube.obj";
+    rmpM->MaterialPath = "Resource/Materials/default.mat.json";
+    auto* rmpCol = ramp->AddComponent<Fujin::ColliderComponent>();
+    rmpCol->Shape   = Fujin::ColliderShape::AABB;        // box; orientation comes from the transform
+    rmpCol->Channel = Fujin::CollisionChannel::WorldStatic;
+
+    // Sphere collider (works against the oriented box) dropped above the ramp's high (+X) side.
+    // Visual mesh is the unit cube (no sphere mesh in the project); the collider is a sphere,
+    // so you also see physics spin the body as it rolls.
+    auto* ball = g_scene.CreateActor("RampBall");
+    auto* ballT = ball->AddComponent<Fujin::TransformComponent>();
+    ballT->Position = Fujin::Vector3(7.5f, 4.0f, 7.0f);
+    auto* ballM = ball->AddComponent<Fujin::MeshComponent>();
+    ballM->MeshPath     = "Resource/Meshes/cube.obj";
+    ballM->MaterialPath = "Resource/Materials/default.mat.json";
+    auto* ballCol = ball->AddComponent<Fujin::ColliderComponent>();
+    ballCol->Shape  = Fujin::ColliderShape::Sphere;
+    ballCol->Radius = 0.5f;
+    auto* ballRb = ball->AddComponent<Fujin::RigidbodyComponent>();
+    ballRb->Mass        = 1.0f;
+    ballRb->Restitution = 0.2f;
+    ballRb->Friction    = 0.4f;
+
+    // ── OBB box×box test: a dynamic BOX dropped onto the tilted ramp. With oriented box-box
+    // collision it should settle FLUSH against the slope (tilted ~25°), not pass through or
+    // lie flat. (z-lane separated from the ball above.) ──
+    auto* rampBox = g_scene.CreateActor("RampBox");
+    auto* rbxT = rampBox->AddComponent<Fujin::TransformComponent>();
+    rbxT->Position = Fujin::Vector3(6.5f, 4.0f, 9.0f);
+    rbxT->Scale    = Fujin::Vector3(0.8f, 0.8f, 0.8f);
+    auto* rbxM = rampBox->AddComponent<Fujin::MeshComponent>();
+    rbxM->MeshPath     = "Resource/Meshes/cube.obj";
+    rbxM->MaterialPath = "Resource/Materials/default.mat.json";
+    auto* rbxCol = rampBox->AddComponent<Fujin::ColliderComponent>();
+    rbxCol->Shape = Fujin::ColliderShape::AABB;
+    auto* rbxRb = rampBox->AddComponent<Fujin::RigidbodyComponent>();
+    rbxRb->Mass        = 1.0f;
+    rbxRb->Restitution = 0.1f;
+    rbxRb->Friction    = 0.6f;
+
+    // ── Axis-aligned stacking regression: two dynamic boxes dropped on the flat floor at x=-5.
+    // They should settle into a stable, non-rocking stack (OBB path must not regress AABB stacks). ──
+    for (int i = 0; i < 2; ++i) {
+        auto* sb = g_scene.CreateActor(i == 0 ? "StackBoxLower" : "StackBoxUpper");
+        auto* sbT = sb->AddComponent<Fujin::TransformComponent>();
+        sbT->Position = Fujin::Vector3(-5.0f, 1.0f + i * 1.3f, 8.0f);
+        auto* sbM = sb->AddComponent<Fujin::MeshComponent>();
+        sbM->MeshPath     = "Resource/Meshes/cube.obj";
+        sbM->MaterialPath = "Resource/Materials/default.mat.json";
+        auto* sbCol = sb->AddComponent<Fujin::ColliderComponent>();
+        sbCol->Shape = Fujin::ColliderShape::AABB;
+        auto* sbRb = sb->AddComponent<Fujin::RigidbodyComponent>();
+        sbRb->Mass     = 1.0f;
+        sbRb->Friction = 0.6f;
+    }
+
+    // ── Stress / visual: a CLUSTER of many sphere-collider bodies poured onto the tilted ramp.
+    // Exercises the BVH broadphase, sphere-vs-OBB (the tilted ramp) and sphere-sphere at scale —
+    // the spheres cascade down the slope and pile on the floor. ──
+    {
+        constexpr int NX = 4, NY = 4, NZ = 4;   // 64 spheres
+        int idx = 0;
+        for (int ix = 0; ix < NX; ++ix)
+        for (int iy = 0; iy < NY; ++iy)
+        for (int iz = 0; iz < NZ; ++iz) {
+            auto* sp = g_scene.CreateActor("RampSphere_" + std::to_string(idx));
+            auto* spT = sp->AddComponent<Fujin::TransformComponent>();
+            float jitter = ((idx * 7) % 5) * 0.01f;   // tiny offset to break perfect symmetry
+            spT->Position = Fujin::Vector3(5.6f + ix * 0.5f + jitter,
+                                           4.2f + iy * 0.55f,
+                                           6.9f + iz * 0.5f);
+            spT->Scale = Fujin::Vector3(0.4f, 0.4f, 0.4f);
+            auto* spM = sp->AddComponent<Fujin::MeshComponent>();
+            spM->MeshPath     = "Resource/Meshes/cube.obj";   // no sphere mesh; collider is a sphere
+            spM->MaterialPath = "Resource/Materials/default.mat.json";
+            auto* spCol = sp->AddComponent<Fujin::ColliderComponent>();
+            spCol->Shape  = Fujin::ColliderShape::Sphere;
+            spCol->Radius = 0.2f;
+            auto* spRb = sp->AddComponent<Fujin::RigidbodyComponent>();
+            spRb->Mass        = 0.5f;
+            spRb->Restitution = 0.2f;
+            spRb->Friction    = 0.4f;
+            ++idx;
+        }
+    }
+
+    // ── Clustered-lighting stress: a grid of many small point lights over the ground.
+    // Far more than the old 16-light cap; the clustered culling keeps each pixel cheap. ──
+    {
+        constexpr int LGX = 8, LGZ = 8;   // 64 point lights
+        int li = 0;
+        for (int gx = 0; gx < LGX; ++gx)
+        for (int gz = 0; gz < LGZ; ++gz) {
+            auto* pl = g_scene.CreateActor("GridLight_" + std::to_string(li));
+            auto* glT = pl->AddComponent<Fujin::TransformComponent>();
+            glT->Position = Fujin::Vector3(-8.0f + gx * 2.3f, 1.0f, -3.0f + gz * 2.3f);
+            auto* glc = pl->AddComponent<Fujin::LightComponent>();
+            glc->Type      = Fujin::LightType::Point;
+            // Cycle hues so the grid is visually distinct.
+            float h = (float)li / (float)(LGX * LGZ);
+            glc->Color     = Fujin::Vector3(0.5f + 0.5f * std::sin(h * 6.2831f),
+                                            0.5f + 0.5f * std::sin(h * 6.2831f + 2.094f),
+                                            0.5f + 0.5f * std::sin(h * 6.2831f + 4.188f));
+            glc->Intensity = 3.0f;
+            glc->Range     = 2.8f;
+            ++li;
+        }
+    }
+
     Fujin::SceneSerializer::Save(g_scene, "Resource/Scenes/test.scene.json");
 }
 
@@ -159,9 +291,46 @@ static void Run() {
 
         g_gfx.BeginFrame();
 
-        // Physics step (only while playing)
-        if (g_editor.IsPlaying())
+        // Physics step (only while playing); snapshot/restore transforms on play/stop
+        const bool isPlaying = g_editor.IsPlaying();
+        static bool s_wasPlaying = false;
+
+        struct TransformSnapshot { Fujin::Vector3 pos; Fujin::Quaternion rot; Fujin::Vector3 scale; };
+        static std::unordered_map<uint64_t, TransformSnapshot> s_snapshot;
+
+        if (isPlaying && !s_wasPlaying) {
+            // Play started: save all transforms, then fire BeginPlay on every component.
+            s_snapshot.clear();
+            for (auto& actor : g_scene.GetActors()) {
+                auto* tc = actor->GetComponent<Fujin::TransformComponent>();
+                if (tc) s_snapshot[actor->GetId()] = { tc->Position, tc->Rotation, tc->Scale };
+            }
+            g_scene.BeginPlay();
+        }
+        if (!isPlaying && s_wasPlaying) {
+            // Stop: fire EndPlay, restore all transforms, then reset physics state
+            g_scene.EndPlay();
+            for (auto& actor : g_scene.GetActors()) {
+                auto* tc = actor->GetComponent<Fujin::TransformComponent>();
+                auto it  = s_snapshot.find(actor->GetId());
+                if (tc && it != s_snapshot.end()) {
+                    tc->Position = it->second.pos;
+                    tc->Rotation = it->second.rot;
+                    tc->Scale    = it->second.scale;
+                }
+            }
+            g_physics.Reset(g_scene);
+        }
+        s_wasPlaying = isPlaying;
+
+        // Refresh cached world transforms (editor edits, parenting) before gameplay/physics read them.
+        g_scene.UpdateWorldTransforms();
+
+        if (isPlaying) {
+            g_scene.Update(dt);              // gameplay tick (PrePhysics): may move actors / apply forces
+            g_scene.UpdateWorldTransforms(); // reflect gameplay edits before physics reads world
             g_physics.Step(g_scene, dt);
+        }
 
         // BeginFrame first: starts ImGui frame + updates debug camera from input
         g_editor.BeginFrame(dt);

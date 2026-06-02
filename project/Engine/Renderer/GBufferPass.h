@@ -8,6 +8,8 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstdint>
+#include <unordered_set>
+#include <unordered_map>
 
 namespace Fujin {
 
@@ -29,7 +31,9 @@ public:
                  GeometryManager& geoMgr,
                  TextureManager& texMgr,
                  MaterialManager& matMgr,
-                 const Matrix4x4& viewProj);
+                 const Matrix4x4& viewProj,
+                 const Matrix4x4& prevViewProj,
+                 const std::unordered_set<uint64_t>* visibleActors = nullptr);
     void Shutdown();
 
 private:
@@ -52,6 +56,8 @@ private:
     uint8_t*                    m_skinnedCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
     ComPtr<ID3D12Resource>      m_bonePaletteCB[NUM_FRAMES_IN_FLIGHT];
     uint8_t*                    m_bonePaletteMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    ComPtr<ID3D12Resource>      m_prevBonePaletteCB[NUM_FRAMES_IN_FLIGHT];     // last frame's palette (motion vectors)
+    uint8_t*                    m_prevBonePaletteMapped[NUM_FRAMES_IN_FLIGHT] = {};
 
     bool CreateRootSignature(ID3D12Device* device);
     bool CreatePipelineState(ID3D12Device* device, const GBuffer& gbuffer);
@@ -62,6 +68,9 @@ private:
     bool CreateSkinnedRootSignature(ID3D12Device* device);
     bool CreateSkinnedPipelineState(ID3D12Device* device, const GBuffer& gbuffer);
     bool CreateSkinnedBuffers(ID3D12Device* device);
+
+    // Per-actor world matrix from the previous frame (for motion vectors).
+    std::unordered_map<uint64_t, Matrix4x4> m_prevWorld;
 };
 
 } // namespace Fujin

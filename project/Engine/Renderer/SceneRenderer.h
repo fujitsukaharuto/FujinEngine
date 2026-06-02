@@ -8,11 +8,16 @@
 #include "Material/MaterialManager.h"
 #include "Effect/ParticlePass.h"
 #include "PostProcess/PostProcessPass.h"
+#include "TranslucencyPass.h"
 #include "Engine/Asset/GeometryManager.h"
 #include "Engine/Asset/TextureManager.h"
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Math/Math.h"
+#include "Engine/Spatial/Bvh.h"
 #include <chrono>
+#include <unordered_map>
+#include <unordered_set>
+#include <cstdint>
 
 namespace Fujin {
 
@@ -51,8 +56,9 @@ private:
     LightingPass     m_lightingPass;
     ShadowPass       m_shadowPass;
     IBLPreprocessor  m_ibl;
-    ParticlePass     m_particlePass;
-    PostProcessPass  m_postProcess;
+    ParticlePass       m_particlePass;
+    TranslucencyPass   m_translucencyPass;
+    PostProcessPass    m_postProcess;
     RenderGraph      m_rg;
     float            m_totalTime = 0.0f;
 
@@ -60,8 +66,22 @@ private:
     Matrix4x4 m_lastView;
     Matrix4x4 m_lastProj;
 
+    // TAA: sub-pixel jitter sequence index + previous frame's (jittered) view-proj for reprojection.
+    uint32_t  m_frameCounter = 0;
+    Matrix4x4 m_prevViewProjJittered;
+    // Previous frame's jitter in viewport-uv; the delta (cur-prev) cancels jitter from reprojection.
+    float     m_prevJitterUVx = 0.0f;
+    float     m_prevJitterUVy = 0.0f;
+
     std::chrono::steady_clock::time_point m_lastFrameTime;
     bool                                  m_firstFrame = true;
+
+    // Frustum culling: a persistent BVH of static opaque meshes (camera-only movement = no rebuild).
+    Bvh                               m_renderBvh;
+    std::unordered_map<uint64_t, int> m_renderProxies;   // actor id → proxy
+    std::unordered_set<uint64_t>      m_visible;          // ids passing the camera frustum
+
+    void BuildVisibleSet(const SceneManager& scene, const Matrix4x4& viewProj);
 
     void UpdateAnimations(const SceneManager& scene, float dt);
     void UpdateParticles (const SceneManager& scene, float dt);

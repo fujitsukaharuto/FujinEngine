@@ -1,0 +1,16 @@
+{
+  "albedoTexturePath": "Resource/Textures/brass_pan_01_diff.jpg",
+  "name": "metaru.mat",
+  "normalTexturePath": "Resource/Textures/brass_pan_01_nor_gl.png",
+  "ormTexturePath": "Resource/Textures/brass_pan_01_metal-brass_pan_01_rough.png",
+  "params": {
+    "AO": 1.0,
+    "AlbedoColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "Metallic": 1.0,
+    "Roughness": 1.0
+  }
+}

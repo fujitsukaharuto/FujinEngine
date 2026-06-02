@@ -4,6 +4,13 @@ cbuffer SSAOCB : register(b0) {
     float Radius;
     float Bias;
     float _p0, _p1;
+    // The scene is rendered into a sub-rectangle of the full-size depth/normal RTs (the editor's
+    // 3D viewport), so world reconstruction must use VIEWPORT-relative NDC and sample projection
+    // must map viewport-uv back to full-RT uv. When the viewport fills the RT these are identities,
+    // so this is a no-op for a full-screen (non-editor) render.
+    float4 Viewport;   // x, y, w, h  (pixels within the full RT)
+    float2 RTSize;     // full render-target width, height
+    float2 _p2;
 };
 
 Texture2D<float4> NormalRT  : register(t0);   // GBuffer RT1: world normal (rgb) + roughness (a)
@@ -26,8 +33,11 @@ static const float3 g_kernel[16] = {
     float3( 0.000, 0.857, 0.515), float3( 0.606, 0.606, 0.515),
 };
 
-float3 ReconstructWorld(float2 uv, float depth) {
-    float2 ndc   = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+// fullUV is a coordinate in the full RT; convert to viewport-relative uv before building NDC,
+// because InvViewProj maps the viewport's NDC (not the full RT's) to world space.
+float3 ReconstructWorld(float2 fullUV, float depth) {
+    float2 vuv   = (fullUV * RTSize - Viewport.xy) / Viewport.zw;
+    float2 ndc   = float2(vuv.x * 2.0 - 1.0, 1.0 - vuv.y * 2.0);
     float4 clip  = float4(ndc, depth, 1.0);
     float4 world = mul(InvViewProj, clip);
     return world.xyz / world.w;
@@ -65,18 +75,20 @@ void main(uint3 DTid : SV_DispatchThreadID) {
         scale = lerp(0.1, 1.0, scale * scale);
         float3 samplePos = worldPos + sampleDir * Radius * scale;
 
-        // Project sample to screen UV
+        // Project sample to viewport-relative screen UV
         float4 clip = mul(ViewProj, float4(samplePos, 1.0));
         float2 sUV  = clip.xy / clip.w;
         sUV = sUV * float2(0.5, -0.5) + 0.5;
 
-        if (any(sUV < 0.0) || any(sUV > 1.0)) continue;
+        if (any(sUV < 0.0) || any(sUV > 1.0)) continue;   // outside the viewport
 
-        float  sampledDepth  = DepthTex.SampleLevel(LinearSamp, sUV, 0);
+        // Map viewport-uv → full-RT uv to read the full-size depth texture.
+        float2 sFullUV       = (Viewport.xy + sUV * Viewport.zw) / RTSize;
+        float  sampledDepth  = DepthTex.SampleLevel(LinearSamp, sFullUV, 0);
         float  projectedZ    = clip.z / clip.w;  // NDC z of the sample
 
         // Occluded if actual geometry is closer than our sample
-        float3 geoPos        = ReconstructWorld(sUV, sampledDepth);
+        float3 geoPos        = ReconstructWorld(sFullUV, sampledDepth);
         float  geoDist       = length(geoPos - worldPos);
         float  rangeCheck    = 1.0 - saturate(geoDist / Radius);
 

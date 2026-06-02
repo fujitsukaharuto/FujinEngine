@@ -31,6 +31,10 @@ struct MeshAsset {
     D3D12_VERTEX_BUFFER_VIEW VBView = {};
     D3D12_INDEX_BUFFER_VIEW  IBView = {};
     std::vector<SubMesh>     SubMeshes;
+
+    // Local-space bounds (min/max of vertex positions) for frustum culling.
+    float BoundsMin[3] = { 0.0f, 0.0f, 0.0f };
+    float BoundsMax[3] = { 0.0f, 0.0f, 0.0f };
 };
 
 } // namespace Fujin

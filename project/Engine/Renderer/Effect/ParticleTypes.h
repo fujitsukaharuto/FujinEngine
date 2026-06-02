@@ -28,8 +28,9 @@ struct Particle {
 // ---- Module data structs (plain serializable data) -------------------------
 
 struct SpawnModule {
+    bool         BurstMode     = false;     // true=burst only, false=continuous rate
     float        RatePerSecond = 20.0f;
-    int          BurstCount    = 0;         // extra burst on play start
+    int          BurstCount    = 10;        // particles spawned per burst
     EmitterShape Shape         = EmitterShape::Point;
     float        ShapeRadius   = 0.5f;
     Vector3      ShapeExtent   = { 0.5f, 0.5f, 0.5f };

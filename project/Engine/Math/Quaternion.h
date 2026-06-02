@@ -60,6 +60,17 @@ namespace Fujin {
 			}
 		}
 
+		Quaternion Conjugate() const { return Quaternion(-x, -y, -z, w); }
+
+		// Inverse. For a unit quaternion this equals the conjugate; we divide by the squared
+		// norm so it is also correct for non-normalised inputs.
+		Quaternion Inverse() const {
+			float lenSq = x * x + y * y + z * z + w * w;
+			if (lenSq < Math::SMALL_NUMBER) return Quaternion(0, 0, 0, 1);
+			float inv = 1.0f / lenSq;
+			return Quaternion(-x * inv, -y * inv, -z * inv, w * inv);
+		}
+
 		static Quaternion Slerp(const Quaternion& a, Quaternion b, float t) {
 			float dot = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
 			if (dot < 0.0f) { b = Quaternion(-b.x, -b.y, -b.z, -b.w); dot = -dot; }

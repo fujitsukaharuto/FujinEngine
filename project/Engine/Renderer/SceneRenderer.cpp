@@ -16,6 +16,62 @@ namespace Fujin {
 static constexpr float CAMERA_NEAR = 0.1f;
 static constexpr float CAMERA_FAR  = 1000.0f;
 
+// Halton low-discrepancy sequence (for TAA sub-pixel jitter).
+static float Halton(uint32_t i, uint32_t base) {
+    float f = 1.0f, r = 0.0f;
+    while (i > 0) { f /= (float)base; r += f * (float)(i % base); i /= base; }
+    return r;
+}
+
+// World-space AABB of local bounds transformed by a matrix (transforms the 8 corners).
+static Aabb TransformBounds(const float mn[3], const float mx[3], const Matrix4x4& m) {
+    Aabb out;
+    for (int i = 0; i < 8; ++i) {
+        Vector4 c((i & 1) ? mx[0] : mn[0],
+                  (i & 2) ? mx[1] : mn[1],
+                  (i & 4) ? mx[2] : mn[2], 1.0f);
+        Vector4 w = m * c;
+        if (w.x < out.lo.x) out.lo.x = w.x;  if (w.x > out.hi.x) out.hi.x = w.x;
+        if (w.y < out.lo.y) out.lo.y = w.y;  if (w.y > out.hi.y) out.hi.y = w.y;
+        if (w.z < out.lo.z) out.lo.z = w.z;  if (w.z > out.hi.z) out.hi.z = w.z;
+    }
+    return out;
+}
+
+// Refresh the render BVH from static opaque meshes and collect the ids inside the camera frustum.
+// Skeletal (animated) meshes are not culled here — their bounds vary with the pose — so they are
+// always considered visible by the GBuffer pass.
+void SceneRenderer::BuildVisibleSet(const SceneManager& scene, const Matrix4x4& viewProj) {
+    std::unordered_set<uint64_t> seen;
+    for (auto& ap : scene.GetActors()) {
+        auto* mc = ap->GetComponent<MeshComponent>();
+        auto* tc = ap->GetComponent<TransformComponent>();
+        if (!mc || !tc) continue;
+        if (m_geoMgr.IsSkeletal(mc->MeshPath)) continue;          // animated → never culled
+        const MeshAsset* mesh = m_geoMgr.LoadMesh(mc->MeshPath);
+        if (!mesh || mesh->SubMeshes.empty()) continue;
+
+        uint64_t id = ap->GetId();
+        seen.insert(id);
+        Aabb box = TransformBounds(mesh->BoundsMin, mesh->BoundsMax, tc->GetWorldMatrix());
+
+        auto it = m_renderProxies.find(id);
+        if (it == m_renderProxies.end()) m_renderProxies[id] = m_renderBvh.CreateProxy(box, ap.get());
+        else                             m_renderBvh.MoveProxy(it->second, box);
+    }
+    for (auto it = m_renderProxies.begin(); it != m_renderProxies.end(); ) {
+        if (seen.count(it->first)) ++it;
+        else { m_renderBvh.DestroyProxy(it->second); it = m_renderProxies.erase(it); }
+    }
+
+    Plane planes[6];
+    ExtractFrustumPlanes(viewProj, planes);
+    m_visible.clear();
+    m_renderBvh.QueryFrustum(planes, [&](void* ud) {
+        m_visible.insert(static_cast<Actor*>(ud)->GetId());
+    });
+}
+
 bool SceneRenderer::Initialize(GraphicsDevice& gfx) {
     if (!m_geoMgr.Initialize(gfx.GetDevice(), gfx.GetCommandQueue())) return false;
     if (!m_texMgr.Initialize(gfx))                                    return false;
@@ -29,8 +85,9 @@ bool SceneRenderer::Initialize(GraphicsDevice& gfx) {
     if (!m_lightingPass.Initialize(gfx))           return false;
     if (!m_shadowPass.Initialize(gfx))             return false;
     if (!m_ibl.Initialize(gfx))                    return false;
-    if (!m_particlePass.Initialize(gfx))            return false;
-    if (!m_postProcess.Initialize(gfx, w, h))       return false;
+    if (!m_particlePass.Initialize(gfx))             return false;
+    if (!m_translucencyPass.Initialize(gfx))         return false;
+    if (!m_postProcess.Initialize(gfx, w, h))        return false;
 
     return true;
 }
@@ -76,7 +133,9 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
         if (!lc || lc->Type != LightType::Directional) continue;
         auto* tc = actorPtr->GetComponent<TransformComponent>();
         if (tc) {
-            Matrix4x4 rotMat = tc->Rotation.ToMatrix();
+            // Use the world rotation (CachedWorld), not the local one, so a parented
+            // directional light casts shadows in the correct world direction.
+            Matrix4x4 rotMat = tc->CachedWorld.Rotation.ToMatrix();
             lightDir = Vector3(rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2]).GetSafeNormal();
         }
         break;
@@ -92,6 +151,19 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     float aspect      = (evpH > 0) ? static_cast<float>(evpW) / static_cast<float>(evpH) : 1.0f;
     Matrix4x4 view    = Matrix4x4::LookAt(CameraPos, CameraTarget, Vector3(0, 1, 0));
     Matrix4x4 proj    = Matrix4x4::Perspective(Math::ToRadians(60.0f), aspect, CAMERA_NEAR, CAMERA_FAR);
+    // TAA sub-pixel jitter: nudge the projection by <1px so successive frames sample different
+    // sub-pixel positions; the TAA resolve averages them. No jitter when TAA is disabled.
+    float jitterUVx = 0.0f, jitterUVy = 0.0f;   // this frame's jitter in viewport-uv
+    if (m_postProcess.TaaEnabled && evpW > 0 && evpH > 0) {
+        // ±0.5px jitter measured in the rendered viewport (NDC spans the viewport, not the full RT).
+        float jx = (Halton(m_frameCounter + 1, 2) - 0.5f) * 2.0f / (float)evpW;
+        float jy = (Halton(m_frameCounter + 1, 3) - 0.5f) * 2.0f / (float)evpH;
+        proj.m[0][2] += jx;
+        proj.m[1][2] += jy;
+        // uv = ndc*(0.5,-0.5)+0.5, so the jitter contributes (jx*0.5, -jy*0.5) to the projected uv.
+        jitterUVx =  jx * 0.5f;
+        jitterUVy = -jy * 0.5f;
+    }
     Matrix4x4 viewProj     = proj * view;
     Matrix4x4 invViewProj  = viewProj.GetInverse();
     m_lastViewProj = viewProj;
@@ -99,9 +171,20 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     m_lastProj     = proj;
     Vector3   cameraForward = (CameraTarget - CameraPos).GetSafeNormal();
 
+    // Frustum culling: refresh the render BVH and the visible set for this camera.
+    BuildVisibleSet(scene, viewProj);
+
     // --- CPU: compute shadow cascades ---
     ShadowData shadowData;
     m_shadowPass.ComputeCascades(invViewProj, CAMERA_NEAR, CAMERA_FAR, lightDir, shadowData);
+
+    // --- CPU: select shadow-casting spot/point lights (opt-in; nearest within budget) ---
+    m_lightingPass.PrepareSpotShadows(scene, CameraPos);
+    const SpotShadowData& spotData = m_lightingPass.GetSpotData();
+    const bool hasSpotShadows = spotData.Count > 0;
+    m_lightingPass.PreparePointShadows(scene, CameraPos);
+    const PointShadowData& pointData = m_lightingPass.GetPointData();
+    const bool hasPointShadows = pointData.Count > 0;
 
     // --- SSAO (one-frame lag): runs before RG using previous frame's GBuffer/depth ---
     // Transition GBuffer RT1 and depth to compute-shader SRV state
@@ -119,7 +202,8 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
         barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmd->ResourceBarrier(2, barriers);
     }
-    m_postProcess.ExecuteSSAO(cmd, gfx, m_gbuffer, viewProj, invViewProj, frameIndex);
+    m_postProcess.ExecuteSSAO(cmd, gfx, m_gbuffer, viewProj, invViewProj, frameIndex,
+                              evpX, evpY, evpW, evpH);
     // Restore for render graph
     {
         D3D12_RESOURCE_BARRIER barriers[2] = {};
@@ -146,20 +230,30 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                  D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     RGHandle hGB2 = m_rg.Import("GBuffer2", m_gbuffer.GetResource(2),
                                  D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    RGHandle hGB3 = m_rg.Import("GBuffer3", m_gbuffer.GetResource(3),
+                                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);   // motion vectors
     RGHandle hDepth  = m_rg.Import("Depth",     gfx.GetDepthBuffer(),
                                     D3D12_RESOURCE_STATE_DEPTH_WRITE);
     RGHandle hShadow = m_rg.Import("ShadowMap", m_shadowPass.GetShadowMap(),
                                     D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    RGHandle hSpotShadow{};
+    if (hasSpotShadows)
+        hSpotShadow = m_rg.Import("SpotShadowMap", m_shadowPass.GetSpotMap(),
+                                  D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    RGHandle hPointShadow{};
+    if (hasPointShadows)
+        hPointShadow = m_rg.Import("PointShadowMap", m_shadowPass.GetPointMap(),
+                                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);  // created in PSR
 
-    // GBuffer pass: writes GB0/1/2 as RTV, depth as DSV.
+    // GBuffer pass: writes GB0/1/2/3 as RTV, depth as DSV.
     m_rg.AddPass("GBufferPass",
         {},
-        { AsDSV(hDepth), AsRTV(hGB0), AsRTV(hGB1), AsRTV(hGB2) },
+        { AsDSV(hDepth), AsRTV(hGB0), AsRTV(hGB1), AsRTV(hGB2), AsRTV(hGB3) },
         [&, viewProj, evpX, evpY, evpW, evpH, frameIndex](ID3D12GraphicsCommandList* c) {
             m_gbuffer.Clear(c);
             m_gbufferPass.Execute(c, gfx, m_gbuffer, scene,
                                   evpX, evpY, evpW, evpH, frameIndex,
-                                  m_geoMgr, m_texMgr, m_matMgr, viewProj);
+                                  m_geoMgr, m_texMgr, m_matMgr, viewProj, m_prevViewProjJittered, &m_visible);
         });
 
     // Shadow pass: writes shadow map as DSV (no reads from tracked resources).
@@ -170,12 +264,43 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
             m_shadowPass.ExecuteGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, shadowData);
         });
 
-    // Lighting pass: reads GBuffer + depth + shadow map, writes to HDR render target.
+    // Spot shadow pass (opt-in): render each shadow-casting spot's depth. Skipped when none.
+    if (hasSpotShadows) {
+        m_rg.AddPass("SpotShadowPass",
+            {},
+            { AsDSV(hSpotShadow) },
+            [&, spotData, frameIndex](ID3D12GraphicsCommandList* c) {
+                m_shadowPass.ExecuteSpotGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, spotData);
+            });
+    }
+
+    // Spot shadow pass (opt-in): render each shadow-casting point's depth cube. Skipped when none.
+    if (hasPointShadows) {
+        m_rg.AddPass("PointShadowPass",
+            {},
+            { AsDSV(hPointShadow) },
+            [&, pointData, frameIndex](ID3D12GraphicsCommandList* c) {
+                m_shadowPass.ExecutePointGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, pointData);
+            });
+    }
+
+    // When no spot shadows this frame, bind the (always-PSR) cascade map as a harmless placeholder
+    // at t11 so we never bind a DEPTH_WRITE resource as an SRV. The shader never samples it because
+    // every light's ShadowIndex is -1 in that case.
+    uint32_t spotSRVSlot = hasSpotShadows ? m_shadowPass.GetSpotSRVSlot() : m_shadowPass.GetSRVSlot();
+    // Point cube atlas is created in PSR and left in PSR by the RG, so it is always safe to bind.
+    uint32_t pointSRVSlot = m_shadowPass.GetPointSRVSlot();
+
+    // Lighting pass: reads GBuffer + depth + shadow maps, writes to HDR render target.
+    std::vector<RGHandle> lightReads = { hGB0, hGB1, hGB2, hDepth, hShadow };
+    if (hasSpotShadows)  lightReads.push_back(hSpotShadow);
+    if (hasPointShadows) lightReads.push_back(hPointShadow);
+
     D3D12_CPU_DESCRIPTOR_HANDLE hdrRTV = m_postProcess.GetHDRRTV();
     m_rg.AddPass("LightingPass",
-        { hGB0, hGB1, hGB2, hDepth, hShadow },
+        lightReads,
         {},
-        [&, invViewProj, cameraForward, shadowData, frameIndex, evpX, evpY, evpW, evpH, hdrRTV](ID3D12GraphicsCommandList* c) {
+        [&, invViewProj, cameraForward, shadowData, frameIndex, evpX, evpY, evpW, evpH, hdrRTV, spotSRVSlot, pointSRVSlot](ID3D12GraphicsCommandList* c) {
             // Clear HDR RT to sky color
             float clearColor[4] = { 0.08f, 0.08f, 0.1f, 1.0f };
             c->ClearRenderTargetView(hdrRTV, clearColor, 0, nullptr);
@@ -188,7 +313,9 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                    hdrRTV,
                                    m_postProcess.GetSSAOSRVSlot(),
                                    m_postProcess.SSAOEnabled ? 1.0f : 0.0f,
-                                   evpX, evpY, evpW, evpH);
+                                   evpX, evpY, evpW, evpH,
+                                   CAMERA_NEAR, CAMERA_FAR,
+                                   spotSRVSlot, pointSRVSlot);
         });
 
     m_rg.Compile();
@@ -200,7 +327,23 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     m_rg.TransitionResource(cmd, hGB0, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_rg.TransitionResource(cmd, hGB1, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_rg.TransitionResource(cmd, hGB2, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    m_rg.TransitionResource(cmd, hGB3, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_rg.TransitionResource(cmd, hDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+    // Translucency pass: forward PBR, sorted back-to-front, renders into HDR RT
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE hdrRtv = m_postProcess.GetHDRRTV();
+        m_translucencyPass.Execute(cmd, gfx, scene, frameIndex,
+                                   m_geoMgr, m_texMgr, m_matMgr,
+                                   viewProj, CameraPos, cameraForward,
+                                   shadowData,
+                                   m_shadowPass.GetSRVSlot(),
+                                   m_ibl.GetIrradianceSlot(),
+                                   m_ibl.GetPrefilteredSlot(),
+                                   m_ibl.GetBRDFLUTSlot(),
+                                   hdrRtv,
+                                   evpX, evpY, evpW, evpH);
+    }
 
     // Particle pass: forward alpha-blended, renders into HDR RT
     {
@@ -213,6 +356,24 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                evpX, evpY, evpW, evpH, frameIndex, m_totalTime, dt);
     }
 
+    // SSR (no-op unless enabled): composites screen-space reflections into the HDR RT.
+    m_postProcess.ExecuteSSR(cmd, gfx, m_gbuffer,
+                             gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                             viewProj, invViewProj, CameraPos,
+                             frameIndex, evpX, evpY, evpW, evpH);
+
+    // TAA resolve (no-op unless enabled): reprojects history into the HDR RT before tonemap.
+    m_postProcess.ExecuteTAA(cmd, gfx, frameIndex,
+                             gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                             m_gbuffer.GetResource(3), m_gbuffer.GetSRVSlot(3),
+                             invViewProj, m_prevViewProjJittered,
+                             jitterUVx - m_prevJitterUVx, jitterUVy - m_prevJitterUVy,
+                             evpX, evpY, evpW, evpH);
+    m_prevViewProjJittered = viewProj;
+    m_prevJitterUVx = jitterUVx;
+    m_prevJitterUVy = jitterUVy;
+    ++m_frameCounter;
+
     // Post-process: bloom + tonemap + FXAA → back buffer
     m_postProcess.ExecuteFinal(cmd, gfx, frameIndex, evpX, evpY, evpW, evpH);
 
@@ -224,6 +385,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
 
 void SceneRenderer::Shutdown() {
     m_postProcess.Shutdown();
+    m_translucencyPass.Shutdown();
     m_particlePass.Shutdown();
     m_ibl.Shutdown();
     m_shadowPass.Shutdown();
@@ -297,6 +459,11 @@ void SceneRenderer::UpdateAnimations(const SceneManager& scene, float dt) {
         auto* animComp = actor->GetComponent<AnimationComponent>();
         auto* meshComp = actor->GetComponent<MeshComponent>();
         if (!animComp || !meshComp) continue;
+
+        // Snapshot last frame's palette for skeletal motion vectors before we overwrite it.
+        // On the very first frame BonePalette is identity → prev==identity, but TAA history is
+        // invalid that frame anyway, so the large initial motion vector is harmless.
+        animComp->PrevBonePalette = animComp->BonePalette;
 
         const SkeletalMeshAsset* skelMesh = m_geoMgr.LoadSkeletalMesh(meshComp->MeshPath);
         if (!skelMesh || skelMesh->Clips.empty()) {

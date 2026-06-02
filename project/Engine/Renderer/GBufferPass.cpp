@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <cctype>
 #include <string>
+#include <unordered_set>
 
 namespace Fujin {
 
@@ -166,7 +167,9 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
                            GeometryManager& geoMgr,
                            TextureManager& texMgr,
                            MaterialManager& matMgr,
-                           const Matrix4x4& viewProj) {
+                           const Matrix4x4& viewProj,
+                           const Matrix4x4& prevViewProj,
+                           const std::unordered_set<uint64_t>* visibleActors) {
 
     // Bind GBuffer RTVs + main depth
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[GBuffer::RT_COUNT];
@@ -194,14 +197,19 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
         Actor* actor = actorPtr.get();
         if (!actor->HasComponent<MeshComponent>()) continue;
 
+        // Frustum culling (static opaque meshes only; skinned/translucent handled elsewhere).
+        if (visibleActors && !visibleActors->count(actor->GetId())) continue;
+
         auto* meshComp = actor->GetComponent<MeshComponent>();
         if (geoMgr.IsSkeletal(meshComp->MeshPath)) continue;  // handled by skinned pass
+
+        if (meshComp->Blend == MeshBlendMode::Translucent) continue;  // handled by TranslucencyPass
 
         const MeshAsset* mesh = geoMgr.LoadMesh(meshComp->MeshPath);
         if (!mesh || mesh->SubMeshes.empty()) continue;
 
         // Switch PSO variant based on per-actor flags.
-        int psoIdx = (meshComp->DoubleSided ? 2 : 0) | (meshComp->AlphaClip ? 1 : 0);
+        int psoIdx = (meshComp->DoubleSided ? 2 : 0) | (meshComp->Blend == MeshBlendMode::AlphaClip ? 1 : 0);
         ID3D12PipelineState* pso = m_psoVariants[psoIdx].Get();
         if (pso != curStaticPso) {
             cmd->SetPipelineState(pso);
@@ -211,6 +219,12 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
         auto* t = actor->GetComponent<TransformComponent>();
         Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
         Matrix4x4 wvp   = viewProj * world;
+
+        // Motion vectors: previous-frame world-view-proj (last frame's world for this actor).
+        uint64_t  actorId = actor->GetId();
+        auto      pwIt    = m_prevWorld.find(actorId);
+        Matrix4x4 prevWvp = prevViewProj * (pwIt != m_prevWorld.end() ? pwIt->second : world);
+        m_prevWorld[actorId] = world;
 
         cmd->IASetVertexBuffers(0, 1, &mesh->VBView);
         cmd->IASetIndexBuffer(&mesh->IBView);
@@ -225,10 +239,11 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
         for (const SubMesh& sm : mesh->SubMeshes) {
             if (slotIdx >= MAX_OBJECTS) break;
             uint8_t* slot = cbBase + static_cast<size_t>(slotIdx) * CB_SLOT_SIZE;
-            memcpy(slot,      wvp.v,   64);
-            memcpy(slot + 64, world.v, 64);
+            memcpy(slot,       wvp.v,     64);   // WorldViewProj      @0
+            memcpy(slot + 64,  world.v,   64);   // World             @64
+            memcpy(slot + 128, prevWvp.v, 64);   // PrevWorldViewProj @128
 
-            // Write material params from reflected layout, or fall back to SubMesh defaults.
+            // Write material params from reflected layout (now @192), or fall back to SubMesh defaults.
             if (mat && mat->ParamData.size() >= layout.MaterialSize && layout.MaterialSize > 0) {
                 memcpy(slot + layout.MaterialOffset, mat->ParamData.data(), layout.MaterialSize);
             } else {
@@ -237,7 +252,7 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
                     sm.BaseColor[0], sm.BaseColor[1], sm.BaseColor[2],
                     0.0f, 0.5f, 1.0f, 0.0f, 0.0f
                 };
-                memcpy(slot + 128, fallback, sizeof(fallback));
+                memcpy(slot + layout.MaterialOffset, fallback, sizeof(fallback));
             }
 
             D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
@@ -286,27 +301,43 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
         Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
         Matrix4x4 wvp   = viewProj * world;
 
-        // Per-actor transform CB: wvp + world, bound once for all submeshes
+        // Motion vectors: previous-frame world-view-proj (last frame's world for this actor).
+        uint64_t  actorId = actor->GetId();
+        auto      pwIt    = m_prevWorld.find(actorId);
+        Matrix4x4 prevWvp = prevViewProj * (pwIt != m_prevWorld.end() ? pwIt->second : world);
+        m_prevWorld[actorId] = world;
+
+        // Per-actor transform CB: wvp + world + prevWvp, bound once for all submeshes
         uint8_t* transformSlot = sCBBase + static_cast<size_t>(actorPalSlot) * CB_SLOT_SIZE;
-        memcpy(transformSlot,      wvp.v,   64);
-        memcpy(transformSlot + 64, world.v, 64);
+        memcpy(transformSlot,       wvp.v,     64);
+        memcpy(transformSlot + 64,  world.v,   64);
+        memcpy(transformSlot + 128, prevWvp.v, 64);
         D3D12_GPU_VIRTUAL_ADDRESS actorCBAddr =
             m_skinnedCB[fi]->GetGPUVirtualAddress() + static_cast<UINT64>(actorPalSlot) * CB_SLOT_SIZE;
 
-        // Bone palette CB — written once per actor, shared across all submeshes
+        // Bone palette CBs — current and previous frame, written once per actor, shared across submeshes.
         auto*            animComp = actor->GetComponent<AnimationComponent>();
         const Matrix4x4* palette  = (animComp && animComp->PaletteReady)
                                         ? animComp->BonePalette.data()
+                                        : s_identityPalette;
+        const Matrix4x4* prevPalette = (animComp && animComp->PaletteReady)
+                                        ? animComp->PrevBonePalette.data()
                                         : s_identityPalette;
         uint8_t* palPtr = m_bonePaletteMapped[fi] + static_cast<size_t>(actorPalSlot) * BONE_PALETTE_STRIDE;
         memcpy(palPtr, palette, BONE_PALETTE_STRIDE);
         D3D12_GPU_VIRTUAL_ADDRESS palAddr =
             m_bonePaletteCB[fi]->GetGPUVirtualAddress() + static_cast<UINT64>(actorPalSlot) * BONE_PALETTE_STRIDE;
 
+        uint8_t* prevPalPtr = m_prevBonePaletteMapped[fi] + static_cast<size_t>(actorPalSlot) * BONE_PALETTE_STRIDE;
+        memcpy(prevPalPtr, prevPalette, BONE_PALETTE_STRIDE);
+        D3D12_GPU_VIRTUAL_ADDRESS prevPalAddr =
+            m_prevBonePaletteCB[fi]->GetGPUVirtualAddress() + static_cast<UINT64>(actorPalSlot) * BONE_PALETTE_STRIDE;
+
         cmd->IASetVertexBuffers(0, 1, &mesh->VBView);
         cmd->IASetIndexBuffer(&mesh->IBView);
         cmd->SetGraphicsRootConstantBufferView(0, actorCBAddr);
         cmd->SetGraphicsRootConstantBufferView(1, palAddr);
+        cmd->SetGraphicsRootConstantBufferView(6, prevPalAddr);
 
         const Material* mat = mc->MaterialPath.empty()
                               ? nullptr
@@ -346,6 +377,17 @@ void GBufferPass::Execute(ID3D12GraphicsCommandList* cmd,
         }
         ++actorPalSlot;
     }
+
+    // Evict motion-vector history for actors that no longer exist. Actor ids are never reused
+    // (SceneManager::m_nextId only increments), so without this the map grows by one entry for
+    // every actor ever destroyed over a long edit/play session.
+    {
+        std::unordered_set<uint64_t> live;
+        live.reserve(scene.GetActors().size());
+        for (auto& ap : scene.GetActors()) live.insert(ap->GetId());
+        for (auto it = m_prevWorld.begin(); it != m_prevWorld.end(); )
+            if (live.count(it->first)) ++it; else it = m_prevWorld.erase(it);
+    }
 }
 
 void GBufferPass::Shutdown() {
@@ -353,9 +395,11 @@ void GBufferPass::Shutdown() {
         if (m_cbMapped[i])           { m_cbuffer[i]->Unmap(0, nullptr);       m_cbMapped[i] = nullptr; }
         if (m_skinnedCBMapped[i])    { m_skinnedCB[i]->Unmap(0, nullptr);     m_skinnedCBMapped[i] = nullptr; }
         if (m_bonePaletteMapped[i])  { m_bonePaletteCB[i]->Unmap(0, nullptr); m_bonePaletteMapped[i] = nullptr; }
+        if (m_prevBonePaletteMapped[i]) { m_prevBonePaletteCB[i]->Unmap(0, nullptr); m_prevBonePaletteMapped[i] = nullptr; }
         m_cbuffer[i].Reset();
         m_skinnedCB[i].Reset();
         m_bonePaletteCB[i].Reset();
+        m_prevBonePaletteCB[i].Reset();
     }
     for (auto& pso : m_psoVariants) pso.Reset();
     m_rootSignature.Reset();
@@ -368,9 +412,9 @@ void GBufferPass::Shutdown() {
 // ---------------------------------------------------------------------------
 
 bool GBufferPass::CreateSkinnedRootSignature(ID3D12Device* device) {
-    D3D12_ROOT_PARAMETER params[6] = {};
+    D3D12_ROOT_PARAMETER params[7] = {};
 
-    // b0: per-actor transforms (wvp + world) — VS only
+    // b0: per-actor transforms (wvp + world + prevWvp) — VS only
     params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor.ShaderRegister = 0;
     params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -379,6 +423,11 @@ bool GBufferPass::CreateSkinnedRootSignature(ID3D12Device* device) {
     params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[1].Descriptor.ShaderRegister = 1;
     params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+
+    // b3: previous-frame bone palette (skeletal motion vectors) — VS only
+    params[6].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[6].Descriptor.ShaderRegister = 3;
+    params[6].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
 
     // b2: per-submesh material (root constants, 8 dwords) — PS only
     params[2].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -409,7 +458,7 @@ bool GBufferPass::CreateSkinnedRootSignature(ID3D12Device* device) {
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-    rsDesc.NumParameters     = 6;
+    rsDesc.NumParameters     = 7;
     rsDesc.pParameters       = params;
     rsDesc.NumStaticSamplers = 1;
     rsDesc.pStaticSamplers   = &sampler;
@@ -486,7 +535,7 @@ bool GBufferPass::CreateSkinnedBuffers(ID3D12Device* device) {
             m_skinnedCB[i]->Map(0, &range, reinterpret_cast<void**>(&m_skinnedCBMapped[i]));
         }
     }
-    // Bone palette CB
+    // Bone palette CB (current + previous frame, for skeletal motion vectors)
     {
         const UINT64 totalSize = static_cast<UINT64>(BONE_PALETTE_STRIDE) * MAX_SKINNED_ACTORS;
         D3D12_HEAP_PROPERTIES hp = {}; hp.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -501,6 +550,10 @@ bool GBufferPass::CreateSkinnedBuffers(ID3D12Device* device) {
                     D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_bonePaletteCB[i]))))
                 return false;
             m_bonePaletteCB[i]->Map(0, &range, reinterpret_cast<void**>(&m_bonePaletteMapped[i]));
+            if (FAILED(device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                    D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_prevBonePaletteCB[i]))))
+                return false;
+            m_prevBonePaletteCB[i]->Map(0, &range, reinterpret_cast<void**>(&m_prevBonePaletteMapped[i]));
         }
     }
     return true;

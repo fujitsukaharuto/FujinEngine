@@ -10,22 +10,51 @@ static const bool s_rigidbodyRegistered = []() {
     return true;
 }();
 
+// I^{-1}_{world}(v) = R * (d ⊙ (R^T * v))
+// where d = InvInertiaLocal (diagonal).
+// Row-major convention: R[i][j] = m[i][j], so:
+//   R  * v : result[i] = sum_j m[i][j] * v[j]
+//   R^T* v : result[j] = sum_i m[i][j] * v[i]
+Vector3 RigidbodyComponent::ApplyInvInertiaWorld(const Quaternion& rot, const Vector3& v) const {
+    if (IsKinematic) return {};
+    Matrix4x4 r = rot.ToMatrix();
+
+    // local = R^T * v
+    Vector3 local(
+        r.m[0][0]*v.x + r.m[1][0]*v.y + r.m[2][0]*v.z,
+        r.m[0][1]*v.x + r.m[1][1]*v.y + r.m[2][1]*v.z,
+        r.m[0][2]*v.x + r.m[1][2]*v.y + r.m[2][2]*v.z);
+
+    // scale by diagonal inv inertia
+    local.x *= InvInertiaLocal.x;
+    local.y *= InvInertiaLocal.y;
+    local.z *= InvInertiaLocal.z;
+
+    // world = R * local
+    return Vector3(
+        r.m[0][0]*local.x + r.m[0][1]*local.y + r.m[0][2]*local.z,
+        r.m[1][0]*local.x + r.m[1][1]*local.y + r.m[1][2]*local.z,
+        r.m[2][0]*local.x + r.m[2][1]*local.y + r.m[2][2]*local.z);
+}
+
 void RigidbodyComponent::ToJson(nlohmann::json& j) const {
-    j["mass"]          = Mass;
-    j["restitution"]   = Restitution;
-    j["friction"]      = Friction;
-    j["linearDamping"] = LinearDamping;
-    j["isKinematic"]   = IsKinematic;
-    j["useGravity"]    = UseGravity;
+    j["mass"]           = Mass;
+    j["restitution"]    = Restitution;
+    j["friction"]       = Friction;
+    j["linearDamping"]  = LinearDamping;
+    j["angularDamping"] = AngularDamping;
+    j["isKinematic"]    = IsKinematic;
+    j["useGravity"]     = UseGravity;
 }
 
 void RigidbodyComponent::FromJson(const nlohmann::json& j) {
-    if (j.contains("mass"))          Mass          = j["mass"].get<float>();
-    if (j.contains("restitution"))   Restitution   = j["restitution"].get<float>();
-    if (j.contains("friction"))      Friction      = j["friction"].get<float>();
-    if (j.contains("linearDamping")) LinearDamping = j["linearDamping"].get<float>();
-    if (j.contains("isKinematic"))   IsKinematic   = j["isKinematic"].get<bool>();
-    if (j.contains("useGravity"))    UseGravity    = j["useGravity"].get<bool>();
+    if (j.contains("mass"))           Mass           = j["mass"].get<float>();
+    if (j.contains("restitution"))    Restitution    = j["restitution"].get<float>();
+    if (j.contains("friction"))       Friction       = j["friction"].get<float>();
+    if (j.contains("linearDamping"))  LinearDamping  = j["linearDamping"].get<float>();
+    if (j.contains("angularDamping")) AngularDamping = j["angularDamping"].get<float>();
+    if (j.contains("isKinematic"))    IsKinematic    = j["isKinematic"].get<bool>();
+    if (j.contains("useGravity"))     UseGravity     = j["useGravity"].get<bool>();
 }
 
 } // namespace Fujin

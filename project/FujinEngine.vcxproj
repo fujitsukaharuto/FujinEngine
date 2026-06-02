@@ -132,6 +132,7 @@
     <ClCompile Include="Engine\Renderer\GBuffer.cpp" />
     <ClCompile Include="Engine\Renderer\GBufferPass.cpp" />
     <ClCompile Include="Engine\Renderer\LightingPass.cpp" />
+    <ClCompile Include="Engine\Renderer\TranslucencyPass.cpp" />
     <ClCompile Include="Engine\Renderer\ShadowPass.cpp" />
     <ClCompile Include="Engine\Renderer\IBLPreprocessor.cpp" />
     <ClCompile Include="Engine\Renderer\SceneRenderer.cpp" />
@@ -182,6 +183,7 @@
     <ClInclude Include="Engine\Math\MathBase.h" />
     <ClInclude Include="Engine\Math\Matrix.h" />
     <ClInclude Include="Engine\Math\Quaternion.h" />
+    <ClInclude Include="Engine\Math\Transform.h" />
     <ClInclude Include="Engine\Math\Vector.h" />
     <ClInclude Include="Editor\EditorApp.h" />
     <ClInclude Include="Editor\Command\ICommand.h" />
@@ -201,6 +203,7 @@
     <ClInclude Include="Engine\Core\RigidbodyComponent.h" />
     <ClInclude Include="Engine\Core\ColliderComponent.h" />
     <ClInclude Include="Engine\Physics\PhysicsWorld.h" />
+    <ClInclude Include="Engine\Spatial\Bvh.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resource\Shaders\GBufferPass.VS.hlsl">
@@ -276,6 +279,14 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
     <None Include="Resource\Shaders\SSAO.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\TAA.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\SSR.CS.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>

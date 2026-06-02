@@ -23,7 +23,39 @@ public:
                      const GBuffer& gbuffer,
                      const Matrix4x4& viewProj,
                      const Matrix4x4& invViewProj,
-                     uint32_t frameIndex);
+                     uint32_t frameIndex,
+                     uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+
+    // TAA resolve. Call after ParticlePass, BEFORE ExecuteFinal. No-op unless TaaEnabled.
+    // On entry: HDR RT in RENDER_TARGET, depth buffer in DEPTH_WRITE. On exit both are restored.
+    // Reprojects history via depth + previous view-proj, then copies the result back into the HDR RT
+    // so the rest of the chain (bloom/tonemap) is unchanged.
+    void ExecuteTAA(ID3D12GraphicsCommandList* cmd,
+                    GraphicsDevice& gfx,
+                    uint32_t frameIndex,
+                    ID3D12Resource* depthResource,
+                    uint32_t depthSRVSlot,
+                    ID3D12Resource* velocityResource,
+                    uint32_t velocitySRVSlot,
+                    const Matrix4x4& invViewProjCur,
+                    const Matrix4x4& viewProjPrev,
+                    float jitterDeltaU, float jitterDeltaV,
+                    uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+
+    // Screen-space reflections. Call after ParticlePass, BEFORE ExecuteTAA/ExecuteFinal.
+    // No-op unless SsrEnabled. On entry: HDR RT in RENDER_TARGET, depth in DEPTH_WRITE, GBuffer
+    // normal RT in PIXEL_SHADER_RESOURCE; all are restored on exit. Composites reflections into
+    // the HDR RT (additive), so the rest of the chain is unchanged.
+    void ExecuteSSR(ID3D12GraphicsCommandList* cmd,
+                    GraphicsDevice& gfx,
+                    const GBuffer& gbuffer,
+                    ID3D12Resource* depthResource,
+                    uint32_t depthSRVSlot,
+                    const Matrix4x4& viewProj,
+                    const Matrix4x4& invViewProj,
+                    const Vector3& cameraPos,
+                    uint32_t frameIndex,
+                    uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
 
     // Call after ParticlePass.
     // HDR RT must be in RENDER_TARGET state on entry.
@@ -43,6 +75,12 @@ public:
     float Exposure       = 0.45f; // ACES is brighter than Reinhard; tuned to match prior look
     bool  SSAOEnabled    = true;
     bool  FXAAEnabled    = true;
+    bool  TaaEnabled     = false; // temporal AA (motion-vector reprojection); off by default
+    float TaaHistoryBlend = 0.9f; // fraction of reprojected history kept per frame
+    bool  SsrEnabled        = false; // screen-space reflections; off by default
+    float SsrIntensity      = 0.6f;  // overall reflection strength
+    float SsrRoughnessCutoff = 0.6f; // surfaces rougher than this get no SSR
+    float SsrThickness      = 0.5f;  // world-space hit tolerance
 
 private:
     static constexpr uint32_t SSAO_CB_SIZE    = 256;
@@ -85,6 +123,28 @@ private:
     ComPtr<ID3D12Resource>       m_bloomCB[NUM_FRAMES_IN_FLIGHT];   // 4×256B sub-allocs
     uint8_t*                     m_bloomCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
 
+    // ── TAA ────────────────────────────────────────────────────────────
+    ComPtr<ID3D12Resource>       m_taaTex[2];           // R16G16B16A16 ping-pong (history / output)
+    uint32_t                     m_taaSRVSlot[2] = { 0, 0 };
+    uint32_t                     m_taaUAVSlot[2] = { 0, 0 };
+    D3D12_RESOURCE_STATES        m_taaState[2]   = { D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COMMON };
+    uint32_t                     m_taaWriteIndex = 0;
+    bool                         m_taaHistoryValid = false;
+    ComPtr<ID3D12RootSignature>  m_taaRS;
+    ComPtr<ID3D12PipelineState>  m_taaPSO;
+    ComPtr<ID3D12Resource>       m_taaCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_taaCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
+    // ── SSR ────────────────────────────────────────────────────────────
+    ComPtr<ID3D12Resource>       m_ssrTex;              // R16G16B16A16, composited scene+reflection
+    uint32_t                     m_ssrSRVSlot = 0;
+    uint32_t                     m_ssrUAVSlot = 0;
+    D3D12_RESOURCE_STATES        m_ssrState   = D3D12_RESOURCE_STATE_COMMON;
+    ComPtr<ID3D12RootSignature>  m_ssrRS;
+    ComPtr<ID3D12PipelineState>  m_ssrPSO;
+    ComPtr<ID3D12Resource>       m_ssrCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ssrCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
     // ── Tonemap + FXAA ─────────────────────────────────────────────────
     ComPtr<ID3D12RootSignature>  m_tonemapRS;
     ComPtr<ID3D12PipelineState>  m_tonemapPSO;
@@ -98,6 +158,8 @@ private:
     bool CreateSSAOResources(GraphicsDevice& gfx);
     bool CreateBloomResources(GraphicsDevice& gfx);
     bool CreateTonemapResources(GraphicsDevice& gfx);
+    bool CreateTAAResources(GraphicsDevice& gfx);
+    bool CreateSSRResources(GraphicsDevice& gfx);
 
     void ReleaseResolutionResources();
 

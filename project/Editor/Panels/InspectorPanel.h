@@ -29,6 +29,9 @@ private:
     void DrawParticle(Actor* actor);
     void DrawRigidbody(Actor* actor);
     void DrawCollider(Actor* actor);
+    // Generic, reflection-driven panel for any component that overrides Component::Reflect().
+    // Replaces per-type DrawXxx for gameplay/script components — no edits here to add a new one.
+    void DrawReflectedComponents(Actor* actor);
     void DrawMaterialProps(Material* mat);
 
     MaterialManager*            m_matMgr       = nullptr;

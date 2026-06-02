@@ -84,7 +84,8 @@ private:
     bool       m_isPlaying        = false;
     bool       m_isPaused         = false;
     bool       m_layoutBuilt      = false;
-    bool       m_showDebugShapes  = true;
+    bool       m_showDebugShapes  = true;   // master enable for collider/light gizmos
+    bool       m_showAllGizmos     = false;  // false ⇒ only the selected actor's gizmos (perf)
     bool       m_effectEditOpen  = false;  // large effect-editor window is visible
     Actor*     m_effectEditActor = nullptr;
     float      m_dt            = 0.0f;

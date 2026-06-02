@@ -791,14 +791,38 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             bool initParamsChanged = !InitParamsEqual(s.prevInit, desc.Init);
             bool wasReset = (em.GetResetCount() != s.lastResetCount) || initParamsChanged;
             if (wasReset) {
-                s.accumTime      = 0.0f;
-                s.elapsed        = 0.0f;
-                s.lastResetCount = em.GetResetCount();
-                s.prevInit       = desc.Init;
+                s.accumTime          = 0.0f;
+                s.elapsed            = 0.0f;
+                s.lastResetCount     = em.GetResetCount();
+                s.lastBurstFireCount = em.GetBurstFireCount();
+                s.prevInit           = desc.Init;
+                s.burstDone          = false;
+            } else if (s.lastBurstFireCount != em.GetBurstFireCount()) {
+                s.lastBurstFireCount = em.GetBurstFireCount();
+                s.burstDone          = false;
             }
 
             // ── Build spawn data on CPU ──────────────────────────────────────
             s.elapsed += dt;  // always advance for turbulence noise
+
+            auto rv = [](float a, float b) { return a + (rand() / (float)RAND_MAX) * (b - a); };
+            auto fillSpawnEntry = [&](GPUSpawnData& sd, const Vector3& spawnPos) {
+                sd.pos[0] = spawnPos.x; sd.pos[1] = spawnPos.y; sd.pos[2] = spawnPos.z;
+                float lifeRange = desc.Init.LifeMax - desc.Init.LifeMin;
+                sd.lifetime = desc.Init.LifeMin + (lifeRange > 0 ? (rand() / (float)RAND_MAX) * lifeRange : 0);
+                sd.vel[0] = rv(desc.Init.VelMin.x, desc.Init.VelMax.x);
+                sd.vel[1] = rv(desc.Init.VelMin.y, desc.Init.VelMax.y);
+                sd.vel[2] = rv(desc.Init.VelMin.z, desc.Init.VelMax.z);
+                sd.sizeBase = rv(desc.Init.SizeMin, desc.Init.SizeMax);
+                float ei = desc.EmissiveIntensity;
+                sd.colorStart[0] = desc.Init.ColorStart.x * ei; sd.colorStart[1] = desc.Init.ColorStart.y * ei;
+                sd.colorStart[2] = desc.Init.ColorStart.z * ei; sd.colorStart[3] = desc.Init.ColorStart.w;
+                sd.colorEnd[0]   = desc.Init.ColorEnd.x * ei;   sd.colorEnd[1]   = desc.Init.ColorEnd.y * ei;
+                sd.colorEnd[2]   = desc.Init.ColorEnd.z * ei;   sd.colorEnd[3]   = desc.Init.ColorEnd.w;
+                sd.rot     = rv(0.0f, 360.0f);
+                sd.rotRate = rv(desc.Init.RotRateMin, desc.Init.RotRateMax);
+                sd.pad[0]  = sd.pad[1] = 0;
+            };
 
             uint32_t spawnCount = 0;
             if (wasReset) {
@@ -807,29 +831,26 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                        (size_t)s.maxParticles * sizeof(GPUSpawnData));
                 spawnCount = s.maxParticles;
             } else if (em.IsPlaying()) {
-                s.accumTime += dt;
-                float spawnInterval = (desc.Spawn.RatePerSecond > 0.0f)
-                                        ? 1.0f / desc.Spawn.RatePerSecond : 1e9f;
-                auto rv = [](float a, float b) { return a + (rand() / (float)RAND_MAX) * (b - a); };
-                while (s.accumTime >= spawnInterval && spawnCount < maxP) {
-                    s.accumTime -= spawnInterval;
-                    GPUSpawnData& sd = s.spawnMapped[fi][spawnCount++];
-                    Vector3 spawnPos = SampleGPUSpawnPos(desc.Spawn, worldPos);
-                    sd.pos[0] = spawnPos.x; sd.pos[1] = spawnPos.y; sd.pos[2] = spawnPos.z;
-                    float lifeRange = desc.Init.LifeMax - desc.Init.LifeMin;
-                    sd.lifetime = desc.Init.LifeMin + (lifeRange > 0 ? (rand() / (float)RAND_MAX) * lifeRange : 0);
-                    sd.vel[0] = rv(desc.Init.VelMin.x, desc.Init.VelMax.x);
-                    sd.vel[1] = rv(desc.Init.VelMin.y, desc.Init.VelMax.y);
-                    sd.vel[2] = rv(desc.Init.VelMin.z, desc.Init.VelMax.z);
-                    sd.sizeBase = rv(desc.Init.SizeMin, desc.Init.SizeMax);
-                    float ei = desc.EmissiveIntensity;
-                    sd.colorStart[0] = desc.Init.ColorStart.x * ei; sd.colorStart[1] = desc.Init.ColorStart.y * ei;
-                    sd.colorStart[2] = desc.Init.ColorStart.z * ei; sd.colorStart[3] = desc.Init.ColorStart.w;
-                    sd.colorEnd[0]   = desc.Init.ColorEnd.x * ei;   sd.colorEnd[1]   = desc.Init.ColorEnd.y * ei;
-                    sd.colorEnd[2]   = desc.Init.ColorEnd.z * ei;   sd.colorEnd[3]   = desc.Init.ColorEnd.w;
-                    sd.rot     = rv(0.0f, 360.0f);
-                    sd.rotRate = rv(desc.Init.RotRateMin, desc.Init.RotRateMax);
-                    sd.pad[0]  = sd.pad[1] = 0;
+                if (desc.Spawn.BurstMode) {
+                    // Burst mode: fire BurstCount particles once
+                    if (!s.burstDone && desc.Spawn.BurstCount > 0) {
+                        int count = (std::min)((uint32_t)desc.Spawn.BurstCount, maxP);
+                        for (int i = 0; i < count; ++i) {
+                            fillSpawnEntry(s.spawnMapped[fi][spawnCount++],
+                                           SampleGPUSpawnPos(desc.Spawn, worldPos));
+                        }
+                        s.burstDone = true;
+                    }
+                } else {
+                    // Continuous mode: rate-based spawning
+                    s.accumTime += dt;
+                    float spawnInterval = (desc.Spawn.RatePerSecond > 0.0f)
+                                            ? 1.0f / desc.Spawn.RatePerSecond : 1e9f;
+                    while (s.accumTime >= spawnInterval && spawnCount < maxP) {
+                        s.accumTime -= spawnInterval;
+                        fillSpawnEntry(s.spawnMapped[fi][spawnCount++],
+                                       SampleGPUSpawnPos(desc.Spawn, worldPos));
+                    }
                 }
             }
             // Stopped and not reset: spawnCount stays 0, accumTime stays frozen,

@@ -61,6 +61,7 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["loop"]        = Loop;
     j["duration"]    = Duration;
 
+    j["spawn"]["burstMode"]     = Spawn.BurstMode;
     j["spawn"]["ratePerSecond"] = Spawn.RatePerSecond;
     j["spawn"]["burstCount"]    = Spawn.BurstCount;
     j["spawn"]["shape"]         = ShapeStr(Spawn.Shape);
@@ -115,8 +116,9 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
 
     if (j.contains("spawn")) {
         auto& s = j["spawn"];
+        Spawn.BurstMode     = s.value("burstMode",     false);
         Spawn.RatePerSecond = s.value("ratePerSecond", 20.0f);
-        Spawn.BurstCount    = s.value("burstCount",    0);
+        Spawn.BurstCount    = s.value("burstCount",    10);
         Spawn.Shape         = ShapeFromStr(s.value("shape", "point"));
         Spawn.ShapeRadius   = s.value("shapeRadius",   0.5f);
         Spawn.ShapeExtent   = Vec3F(s.value("shapeExtent", nlohmann::json::array()), {0.5f,0.5f,0.5f});
@@ -294,7 +296,7 @@ EmitterDesc MakeExplosionPreset() {
     d.MaxParticles = 300;
     d.Loop         = false;
     d.Duration     = 0.2f;
-    d.Spawn.RatePerSecond = 0.0f;
+    d.Spawn.BurstMode     = true;
     d.Spawn.BurstCount    = 200;
     d.Spawn.Shape         = EmitterShape::Sphere;
     d.Spawn.ShapeRadius   = 0.4f;

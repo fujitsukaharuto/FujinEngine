@@ -354,6 +354,11 @@ void EditorApp::BeginFrame(float dt) {
         if (ImGui::BeginMenu("View")) {
             if (ImGui::MenuItem("Reset Layout"))
                 m_layoutBuilt = false;  // triggers SetupDockLayout next frame
+            ImGui::Separator();
+            ImGui::MenuItem("Debug Shapes", nullptr, &m_showDebugShapes);
+            // Off by default: only the selected actor draws gizmos, so a scene with many
+            // lights/colliders doesn't spend thousands of projected AddLine calls every frame.
+            ImGui::MenuItem("Show All Gizmos", nullptr, &m_showAllGizmos);
             ImGui::EndMenu();
         }
         ImGui::SetNextItemWidth(200.0f);
@@ -569,11 +574,11 @@ void EditorApp::DrawDebugShapes() {
             dl->AddLine(ImVec2(ax, ay), ImVec2(bx, by), col, t);
     };
 
-    // AABB wireframe (12 edges)
-    auto BoxWire = [&](const Vector3& c, const Vector3& h, ImU32 col) {
+    // Oriented box wireframe (12 edges); rotation matches the physics OBB.
+    auto BoxWire = [&](const Vector3& c, const Vector3& h, const Quaternion& rot, ImU32 col) {
         Vector3 v[8];
         for (int i = 0; i < 8; ++i)
-            v[i] = c + Vector3((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z);
+            v[i] = c + rot * Vector3((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z);
         constexpr int E[12][2] = {
             {0,1},{2,3},{4,5},{6,7}, {0,2},{1,3},{4,6},{5,7}, {0,4},{1,5},{2,6},{3,7}
         };
@@ -594,37 +599,74 @@ void EditorApp::DrawDebugShapes() {
         }
     };
 
+    // 180° arc: axA×axB plane, sweeping from +axA toward +axB
+    auto Arc = [&](const Vector3& center, float r,
+                   const Vector3& axA, const Vector3& axB,
+                   ImU32 col, int segs = 12) {
+        constexpr float PI = 3.14159265f;
+        Vector3 prev = center + axA * r;
+        for (int i = 1; i <= segs; ++i) {
+            float a = (float)i / segs * PI;
+            Vector3 cur = center + axA * (r * std::cosf(a)) + axB * (r * std::sinf(a));
+            Line(prev, cur, col);
+            prev = cur;
+        }
+    };
+
+    // By default only the selected actor draws its gizmos; "Show All Gizmos" (View menu) opts into
+    // drawing every actor's, which is the expensive path (each line is two world→screen projects).
+    Actor* selected = m_hierarchyPanel.GetSelectedActor();
+
     for (auto& actorPtr : m_scene->GetActors()) {
+        if (!m_showAllGizmos && actorPtr.get() != selected) continue;
+
         auto* tc = actorPtr->GetComponent<TransformComponent>();
         if (!tc) continue;
 
-        // ── Collider ──────────────────────────────────────────────────────
+        // ── Collider (drawn in world space with scale baked in — matches the physics shape) ──
         if (auto* col = actorPtr->GetComponent<ColliderComponent>()) {
             ImU32 cc = col->IsTrigger ? IM_COL32(0, 220, 220, 200) : IM_COL32(90, 220, 90, 200);
-            Vector3 center = tc->Position + col->Offset;
+            const Transform& w = tc->CachedWorld;
+            Vector3 as(std::fabsf(w.Scale.x), std::fabsf(w.Scale.y), std::fabsf(w.Scale.z));
+            Vector3 center = w.TransformPoint(col->Offset);
+            // std::max is shadowed by the Windows 'max' macro in this translation unit.
+            float sMax  = as.x > as.y ? as.x : as.y; sMax = sMax > as.z ? sMax : as.z;
+            float sMaxXZ = as.x > as.z ? as.x : as.z;
 
             switch (col->Shape) {
-            case ColliderShape::AABB:
-                BoxWire(center, col->HalfExtents, cc);
+            case ColliderShape::AABB: {
+                Vector3 he(col->HalfExtents.x * as.x, col->HalfExtents.y * as.y, col->HalfExtents.z * as.z);
+                BoxWire(center, he, w.Rotation, cc);
                 break;
-            case ColliderShape::Sphere:
-                Circle(center, col->Radius, {1,0,0}, {0,1,0}, cc);
-                Circle(center, col->Radius, {1,0,0}, {0,0,1}, cc);
-                Circle(center, col->Radius, {0,1,0}, {0,0,1}, cc);
+            }
+            case ColliderShape::Sphere: {
+                float rad = col->Radius * sMax;
+                Circle(center, rad, {1,0,0}, {0,1,0}, cc);
+                Circle(center, rad, {1,0,0}, {0,0,1}, cc);
+                Circle(center, rad, {0,1,0}, {0,0,1}, cc);
                 break;
+            }
             case ColliderShape::Capsule: {
-                Matrix4x4 rot = tc->Rotation.ToMatrix();
-                Vector3 up   (rot.m[0][1], rot.m[1][1], rot.m[2][1]);
-                Vector3 right(rot.m[0][0], rot.m[1][0], rot.m[2][0]);
-                Vector3 fwd  (rot.m[0][2], rot.m[1][2], rot.m[2][2]);
-                Vector3 base = center - up * col->HalfHeight;
-                Vector3 tip  = center + up * col->HalfHeight;
-                Circle(base, col->Radius, right, fwd, cc);
-                Circle(tip,  col->Radius, right, fwd, cc);
-                Line(base + right * col->Radius, tip + right * col->Radius, cc);
-                Line(base - right * col->Radius, tip - right * col->Radius, cc);
-                Line(base + fwd   * col->Radius, tip + fwd   * col->Radius, cc);
-                Line(base - fwd   * col->Radius, tip - fwd   * col->Radius, cc);
+                float rad = col->Radius     * sMaxXZ;
+                float hh  = col->HalfHeight  * as.y;
+                Vector3 up    = w.Rotation * Vector3(0, 1, 0);
+                Vector3 right = w.Rotation * Vector3(1, 0, 0);
+                Vector3 fwd   = w.Rotation * Vector3(0, 0, 1);
+                Vector3 base = center - up * hh;
+                Vector3 tip  = center + up * hh;
+                // cylinder rings at the cap boundaries
+                Circle(base, rad, right, fwd, cc);
+                Circle(tip,  rad, right, fwd, cc);
+                // cylinder side lines
+                Line(base + right * rad, tip + right * rad, cc);
+                Line(base - right * rad, tip - right * rad, cc);
+                Line(base + fwd   * rad, tip + fwd   * rad, cc);
+                Line(base - fwd   * rad, tip - fwd   * rad, cc);
+                // hemispherical caps (physics extends Radius beyond base/tip)
+                Arc(tip,  rad, right,  up, cc);
+                Arc(tip,  rad, fwd,    up, cc);
+                Arc(base, rad, right, -up, cc);
+                Arc(base, rad, fwd,   -up, cc);
                 break;
             }
             }

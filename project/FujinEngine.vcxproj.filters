@@ -22,6 +22,9 @@
     <Filter Include="Engine\Physics">
       <UniqueIdentifier>{f1e2d3c4-b5a6-4f7e-8d9c-0b1a2c3d4e5f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Engine\Spatial">
+      <UniqueIdentifier>{a7b8c9d0-e1f2-4a3b-9c4d-5e6f7a8b9c0d}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Editor">
       <UniqueIdentifier>{a8b9c0d1-e2f3-4a5b-6c7d-8e9f0a1b2c3d}</UniqueIdentifier>
     </Filter>
@@ -53,7 +56,7 @@
       <UniqueIdentifier>{f9a0b1c2-d3e4-4f5a-6b7c-8d9e0f1a2b3c}</UniqueIdentifier>
     </Filter>
     <Filter Include="Engine\Animation">
-      <UniqueIdentifier>{e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b}</UniqueIdentifier>
+      <UniqueIdentifier>{b2c3d4e5-f6a7-48b9-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
     </Filter>
     <Filter Include="Engine\Renderer\PostProcess">
       <UniqueIdentifier>{a1b2c3d4-0000-4a5b-bcde-000000000001}</UniqueIdentifier>
@@ -117,6 +120,12 @@
     <None Include="Resource\Shaders\SSAO.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
+    <None Include="Resource\Shaders\TAA.CS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
+    <None Include="Resource\Shaders\SSR.CS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
     <None Include="Resource\Shaders\SSAOBlur.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
@@ -127,6 +136,12 @@
       <Filter>Resource\Shaders</Filter>
     </None>
     <None Include="Resource\Shaders\TonemapFXAA.PS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
+    <None Include="Resource\Shaders\Translucency.VS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
+    <None Include="Resource\Shaders\Translucency.PS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
     <None Include="Resource\Shaders\Random.hlsli">
@@ -187,6 +202,9 @@
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Renderer\LightingPass.cpp">
+      <Filter>Engine\Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Renderer\TranslucencyPass.cpp">
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Renderer\ShadowPass.cpp">
@@ -329,6 +347,9 @@
     <ClInclude Include="Engine\Renderer\LightingPass.h">
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Renderer\TranslucencyPass.h">
+      <Filter>Engine\Renderer</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Renderer\ShadowPass.h">
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
@@ -366,6 +387,9 @@
       <Filter>Engine\Math</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Math\Quaternion.h">
+      <Filter>Engine\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Math\Transform.h">
       <Filter>Engine\Math</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Math\Vector.h">
@@ -415,6 +439,9 @@
     </ClInclude>
     <ClInclude Include="Engine\Core\ColliderComponent.h">
       <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Spatial\Bvh.h">
+      <Filter>Engine\Spatial</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Physics\PhysicsWorld.h">
       <Filter>Engine\Physics</Filter>

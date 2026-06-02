@@ -39,19 +39,21 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
     if (!m_playing) return;
     m_elapsed += dt;
 
-    // Burst at start (always fires once, regardless of duration)
-    if (!m_burstDone && m_desc.Spawn.BurstCount > 0) {
-        for (int i = 0; i < m_desc.Spawn.BurstCount; ++i)
-            SpawnOne(worldPos);
-        m_burstDone = true;
-    }
-
-    // Continuous spawn: stop when non-looping and duration has elapsed
-    if (m_desc.Loop || m_elapsed <= m_desc.Duration) {
-        m_spawnAccum += dt * m_desc.Spawn.RatePerSecond;
-        while (m_spawnAccum >= 1.0f) {
-            m_spawnAccum -= 1.0f;
-            SpawnOne(worldPos);
+    if (m_desc.Spawn.BurstMode) {
+        // Burst mode: fire once (or once per loop cycle)
+        if (!m_burstDone && m_desc.Spawn.BurstCount > 0) {
+            for (int i = 0; i < m_desc.Spawn.BurstCount; ++i)
+                SpawnOne(worldPos);
+            m_burstDone = true;
+        }
+    } else {
+        // Continuous mode: spawn at RatePerSecond
+        if (m_desc.Loop || m_elapsed <= m_desc.Duration) {
+            m_spawnAccum += dt * m_desc.Spawn.RatePerSecond;
+            while (m_spawnAccum >= 1.0f) {
+                m_spawnAccum -= 1.0f;
+                SpawnOne(worldPos);
+            }
         }
     }
 

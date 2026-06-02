@@ -416,10 +416,18 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
     // ── SPAWN ─────────────────────────────────────────────────────────────────
     case 1: {
         BeginProps();
-        Row("Rate / sec");
-        ImGui::DragFloat("##rs", &d.Spawn.RatePerSecond, 0.5f, 0.0f, 5000.0f, "%.1f");
-        Row("Burst Count");
-        ImGui::DragInt("##bc", &d.Spawn.BurstCount, 1.0f, 0, 1000);
+        Row("Burst Mode");
+        ImGui::Checkbox("##bm", &d.Spawn.BurstMode);
+        if (d.Spawn.BurstMode) {
+            Row("Burst Count");
+            ImGui::DragInt("##bc", &d.Spawn.BurstCount, 1.0f, 1, 1000);
+            Row("Fire");
+            if (ImGui::Button("Fire Burst##fb", ImVec2(-1, 0)))
+                em.FireBurst();
+        } else {
+            Row("Rate / sec");
+            ImGui::DragFloat("##rs", &d.Spawn.RatePerSecond, 0.5f, 0.0f, 5000.0f, "%.1f");
+        }
         EndProps();
 
         ImGui::Spacing();

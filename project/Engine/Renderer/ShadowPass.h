@@ -18,10 +18,33 @@ struct ShadowData {
     float     CascadeSplits[4];
 };
 
+// Spot light shadows (Stage A). One perspective depth map per shadow-casting spot, kept in a
+// single Texture2DArray atlas. Built on the CPU each frame by LightingPass (it owns light
+// gathering); ViewProj[i] corresponds to atlas slice i. Count==0 means no spot shadow work.
+struct SpotShadowData {
+    static constexpr uint32_t MAX = 4;   // budget = ShadowPass::MAX_SHADOW_SPOTS
+    Matrix4x4 ViewProj[MAX];
+    uint32_t  Count = 0;
+};
+
+// Point light shadows (Stage B). Each shadow-casting point light gets a depth cube (6 faces) in a
+// TextureCubeArray. The lighting PS reconstructs the per-face NDC depth from the major axis of the
+// light→fragment vector and PCFs the cube with the comparison sampler. Count==0 means no work.
+struct PointShadowData {
+    static constexpr uint32_t MAX = 4;   // budget = ShadowPass::MAX_SHADOW_POINTS
+    Vector3   Pos[MAX];                  // world position (cube center)
+    float     Range[MAX];                // = far plane of the face projection
+    uint32_t  Count = 0;
+};
+
 class ShadowPass {
 public:
-    static constexpr uint32_t CASCADE_COUNT   = 4;
-    static constexpr uint32_t SHADOW_MAP_SIZE = 2048;
+    static constexpr uint32_t CASCADE_COUNT    = 4;
+    static constexpr uint32_t SHADOW_MAP_SIZE  = 2048;
+    static constexpr uint32_t MAX_SHADOW_SPOTS = SpotShadowData::MAX;   // spot shadow budget
+    static constexpr uint32_t SPOT_MAP_SIZE    = 1024;
+    static constexpr uint32_t MAX_SHADOW_POINTS = PointShadowData::MAX;  // point shadow budget
+    static constexpr uint32_t POINT_MAP_SIZE    = 512;                   // per cube face
 
     bool Initialize(GraphicsDevice& gfx);
 
@@ -57,10 +80,43 @@ public:
                     GraphicsDevice& gfx,
                     const ShadowData& data);
 
+    // --- Spot light shadows (Stage A) ---
+    // Build a spot light's perspective view-projection. spotAngleDeg is the full cone aperture.
+    static Matrix4x4 ComputeSpotMatrix(const Vector3& pos, const Vector3& dir,
+                                       float spotAngleDeg, float range);
+
+    // GPU-only: render the depth of all (frustum-culled) casters into each active spot slice.
+    // No barrier insertion — assumes the spot atlas is already in DEPTH_WRITE.
+    void ExecuteSpotGPU(ID3D12GraphicsCommandList* cmd,
+                        const SceneManager& scene,
+                        uint32_t frameIndex,
+                        GeometryManager& geoMgr,
+                        TextureManager& texMgr,
+                        MaterialManager& matMgr,
+                        GraphicsDevice& gfx,
+                        const SpotShadowData& data);
+
+    // --- Point light shadows (Stage B) ---
+    // GPU-only: render 6 cube faces of depth per active point light. No barrier insertion.
+    void ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
+                         const SceneManager& scene,
+                         uint32_t frameIndex,
+                         GeometryManager& geoMgr,
+                         TextureManager& texMgr,
+                         MaterialManager& matMgr,
+                         GraphicsDevice& gfx,
+                         const PointShadowData& data);
+
     void Shutdown();
 
     uint32_t        GetSRVSlot()    const { return m_srvSlot; }
     ID3D12Resource* GetShadowMap()  const { return m_shadowMap.Get(); }
+
+    uint32_t        GetSpotSRVSlot() const { return m_spotSrvSlot; }
+    ID3D12Resource* GetSpotMap()     const { return m_spotMap.Get(); }
+
+    uint32_t        GetPointSRVSlot() const { return m_pointSrvSlot; }
+    ID3D12Resource* GetPointMap()     const { return m_pointMap.Get(); }
 
 private:
     static constexpr uint32_t MAX_OBJECTS          = 256;
@@ -93,6 +149,28 @@ private:
     uint32_t                     m_srvSlot  = 0;
     D3D12_RESOURCE_STATES        m_mapState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
+    // --- Spot shadow atlas (Texture2DArray, MAX_SHADOW_SPOTS slices) ---
+    ComPtr<ID3D12Resource>       m_spotMap;
+    ComPtr<ID3D12DescriptorHeap> m_spotDsvHeap;
+    D3D12_CPU_DESCRIPTOR_HANDLE  m_spotDsvHandles[MAX_SHADOW_SPOTS] = {};
+    uint32_t                     m_spotSrvSlot = 0;
+    // Per-object LightWVP CBs for the spot pass (static+alphaclip share one; skinned its own).
+    ComPtr<ID3D12Resource>       m_spotCB[NUM_FRAMES_IN_FLIGHT];          // MAX_SHADOW_SPOTS × MAX_OBJECTS slots
+    uint8_t*                     m_spotCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    ComPtr<ID3D12Resource>       m_spotSkinnedCB[NUM_FRAMES_IN_FLIGHT];   // MAX_SHADOW_SPOTS × MAX_SKINNED_OBJECTS slots
+    uint8_t*                     m_spotSkinnedMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
+    // --- Point shadow cube atlas (TextureCubeArray, 6 × MAX_SHADOW_POINTS slices) ---
+    static constexpr uint32_t POINT_FACES = 6 * MAX_SHADOW_POINTS;
+    ComPtr<ID3D12Resource>       m_pointMap;          // created in PIXEL_SHADER_RESOURCE
+    ComPtr<ID3D12DescriptorHeap> m_pointDsvHeap;
+    D3D12_CPU_DESCRIPTOR_HANDLE  m_pointDsvHandles[POINT_FACES] = {};
+    uint32_t                     m_pointSrvSlot = 0;
+    ComPtr<ID3D12Resource>       m_pointCB[NUM_FRAMES_IN_FLIGHT];          // POINT_FACES × MAX_OBJECTS slots
+    uint8_t*                     m_pointCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    ComPtr<ID3D12Resource>       m_pointSkinnedCB[NUM_FRAMES_IN_FLIGHT];   // POINT_FACES × MAX_SKINNED_OBJECTS slots
+    uint8_t*                     m_pointSkinnedMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
     bool CreateRootSignature(ID3D12Device* device);
     bool CreateAlphaClipRootSignature(ID3D12Device* device);
     bool CreatePipelineState(ID3D12Device* device);
@@ -101,6 +179,12 @@ private:
     bool CreateSkinnedRootSignature(ID3D12Device* device);
     bool CreateSkinnedPipelineState(ID3D12Device* device);
     bool CreateSkinnedShadowBuffers(ID3D12Device* device);
+
+    bool CreateSpotShadowMap(GraphicsDevice& gfx);
+    bool CreateSpotConstantBuffers(ID3D12Device* device);
+
+    bool CreatePointShadowMap(GraphicsDevice& gfx);
+    bool CreatePointConstantBuffers(ID3D12Device* device);
 };
 
 } // namespace Fujin

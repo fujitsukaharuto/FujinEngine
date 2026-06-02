@@ -9,17 +9,19 @@ namespace Fujin {
 using Microsoft::WRL::ComPtr;
 
 // GBuffer layout:
-//   RT0: DXGI_FORMAT_R8G8B8A8_UNORM   - Albedo (rgb) + Metallic (a)
+//   RT0: DXGI_FORMAT_R8G8B8A8_UNORM     - Albedo (rgb) + Metallic (a)
 //   RT1: DXGI_FORMAT_R16G16B16A16_FLOAT - World Normal (rgb) + Roughness (a)
-//   RT2: DXGI_FORMAT_R8G8B8A8_UNORM   - AO (r)
+//   RT2: DXGI_FORMAT_R8G8B8A8_UNORM     - AO (r)
+//   RT3: DXGI_FORMAT_R16G16_FLOAT       - Screen-space motion vector (UV delta) for TAA
 class GBuffer {
 public:
-    static constexpr uint32_t RT_COUNT = 3;
+    static constexpr uint32_t RT_COUNT = 4;
 
     static constexpr DXGI_FORMAT RT_FORMATS[RT_COUNT] = {
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_R16G16B16A16_FLOAT,
         DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R16G16_FLOAT,
     };
 
     bool Initialize(GraphicsDevice& gfx, uint32_t width, uint32_t height);

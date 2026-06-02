@@ -80,6 +80,19 @@ static ComPtr<ID3D12Resource> CreateUploadBuffer(ID3D12Device* device, UINT64 si
 void GeometryManager::UploadGeometry(const std::vector<MeshVertex>& verts,
                                       const std::vector<uint32_t>&   indices,
                                       MeshAsset&                     asset) {
+    // Local-space bounds for frustum culling (min/max of vertex positions).
+    {
+        float mn[3] = {  3.4e38f,  3.4e38f,  3.4e38f };
+        float mx[3] = { -3.4e38f, -3.4e38f, -3.4e38f };
+        for (const auto& v : verts) {
+            if (v.px < mn[0]) mn[0] = v.px;  if (v.px > mx[0]) mx[0] = v.px;
+            if (v.py < mn[1]) mn[1] = v.py;  if (v.py > mx[1]) mx[1] = v.py;
+            if (v.pz < mn[2]) mn[2] = v.pz;  if (v.pz > mx[2]) mx[2] = v.pz;
+        }
+        if (verts.empty()) { mn[0]=mn[1]=mn[2]=0.f; mx[0]=mx[1]=mx[2]=0.f; }
+        for (int i = 0; i < 3; ++i) { asset.BoundsMin[i] = mn[i]; asset.BoundsMax[i] = mx[i]; }
+    }
+
     UINT64 vbSize = static_cast<UINT64>(verts.size())   * sizeof(MeshVertex);
     UINT64 ibSize = static_cast<UINT64>(indices.size()) * sizeof(uint32_t);
 

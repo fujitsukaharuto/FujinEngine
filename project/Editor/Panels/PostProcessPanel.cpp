@@ -94,6 +94,36 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Unindent(12.0f);
     }
 
+    // ── TAA ────────────────────────────────────────────────────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool taaOpen = ImGui::CollapsingHeader("TAA", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##taa_en", &pp->TaaEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Temporal AA (深度再投影) 有効/無効");
+
+    if (taaOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::SliderFloat("History Blend", &pp->TaaHistoryBlend, 0.5f, 0.97f, "%.2f");
+        ImGui::TextDisabled("動く物体はゴースト（モーションベクタ未対応）");
+        ImGui::Unindent(12.0f);
+    }
+
+    // ── SSR ────────────────────────────────────────────────────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool ssrOpen = ImGui::CollapsingHeader("SSR", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##ssr_en", &pp->SsrEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("スクリーンスペース反射 有効/無効");
+
+    if (ssrOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::SliderFloat("Intensity",        &pp->SsrIntensity,       0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Roughness Cutoff", &pp->SsrRoughnessCutoff, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Thickness",        &pp->SsrThickness,       0.05f, 2.0f, "%.2f");
+        ImGui::TextDisabled("ツヤのある面ほど反射（粗い面は無効）");
+        ImGui::Unindent(12.0f);
+    }
+
     ImGui::End();
 }
 

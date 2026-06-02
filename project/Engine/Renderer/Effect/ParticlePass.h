@@ -110,7 +110,9 @@ private:
         uint32_t maxParticles    = 0;
         float    accumTime       = 0.0f;
         float    elapsed         = 0.0f;
-        uint32_t lastResetCount  = 0;
+        uint32_t lastResetCount      = 0;
+        uint32_t lastBurstFireCount  = 0;
+        bool     burstDone           = false;
         InitModule prevInit      = {};
         D3D12_RESOURCE_STATES particleState = D3D12_RESOURCE_STATE_COMMON;
     };

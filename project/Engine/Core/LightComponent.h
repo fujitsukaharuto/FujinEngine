@@ -13,6 +13,7 @@ public:
     float     Intensity = 1.0f;
     float     Range     = 10.0f;
     float     SpotAngle = 45.0f;
+    bool      CastShadows = false;   // opt-in shadow casting (spot in Stage A)
 
     const char* GetTypeName() const override { return "LightComponent"; }
     void ToJson(nlohmann::json& j) const override;

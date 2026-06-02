@@ -18,9 +18,10 @@ public:
     // Runtime state (managed by SceneRenderer — do not set manually).
     float       Time     = 0.0f;   // elapsed playback time in seconds
     std::array<Matrix4x4, MAX_BONES> BonePalette;
+    std::array<Matrix4x4, MAX_BONES> PrevBonePalette;   // last frame's palette (skeletal motion vectors)
     bool        PaletteReady = false;
 
-    AnimationComponent() { BonePalette.fill(Matrix4x4::Identity); }
+    AnimationComponent() { BonePalette.fill(Matrix4x4::Identity); PrevBonePalette.fill(Matrix4x4::Identity); }
 
     const char* GetTypeName() const override { return "AnimationComponent"; }
     void ToJson(nlohmann::json& j)        const override;

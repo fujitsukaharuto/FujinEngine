@@ -31,15 +31,18 @@ void TransformComponent::FromJson(const nlohmann::json& j) {
     }
 }
 
-Matrix4x4 TransformComponent::GetWorldMatrix() const {
-    Matrix4x4 local = Matrix4x4::Translation(Position) * Rotation.ToMatrix() * Matrix4x4::Scale(Scale);
+Transform TransformComponent::GetWorldTransform() const {
+    Transform local{ Position, Rotation, Scale };
     Actor* owner = GetOwner();
     if (owner && owner->GetParent()) {
-        auto* parentTransform = owner->GetParent()->GetComponent<TransformComponent>();
-        if (parentTransform)
-            return parentTransform->GetWorldMatrix() * local;
+        if (auto* parentTransform = owner->GetParent()->GetComponent<TransformComponent>())
+            return parentTransform->GetWorldTransform() * local;   // world = parent * local
     }
     return local;
+}
+
+Matrix4x4 TransformComponent::GetWorldMatrix() const {
+    return GetWorldTransform().ToMatrix();
 }
 
 } // namespace Fujin

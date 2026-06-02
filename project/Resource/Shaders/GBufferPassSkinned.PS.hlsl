@@ -15,9 +15,11 @@ struct PSOut {
     float4 RT0 : SV_Target0;
     float4 RT1 : SV_Target1;
     float4 RT2 : SV_Target2;
+    float2 RT3 : SV_Target3;   // screen-UV motion vector (prev pose + prev wvp)
 };
 
-PSOut main(float4 sv : SV_POSITION, float3 wnorm : NORMAL, float3 wtangent : TANGENT, float2 uv : TEXCOORD0) {
+PSOut main(float4 sv : SV_POSITION, float3 wnorm : NORMAL, float3 wtangent : TANGENT, float2 uv : TEXCOORD0,
+           float4 curClip : TEXCOORD1, float4 prevClip : TEXCOORD2) {
     float3 albedo = AlbedoTex.Sample(LinearWrap, uv).rgb * AlbedoColor;
 
     float3 N = normalize(wnorm);
@@ -38,8 +40,13 @@ PSOut main(float4 sv : SV_POSITION, float3 wnorm : NORMAL, float3 wtangent : TAN
     float metallic  = orm.b * Metallic;
 
     PSOut o;
+    // Motion vector: viewport-UV delta between previous and current (jittered) positions.
+    float2 curUV  = (curClip.xy  / curClip.w)  * float2(0.5, -0.5) + 0.5;
+    float2 prevUV = (prevClip.xy / prevClip.w) * float2(0.5, -0.5) + 0.5;
+
     o.RT0 = float4(albedo, metallic);
     o.RT1 = float4(normal * 0.5 + 0.5, roughness);
     o.RT2 = float4(ao, 0.0, 0.0, 0.0);
+    o.RT3 = curUV - prevUV;
     return o;
 }

@@ -5,25 +5,31 @@ cbuffer Camera : register(b0) {
     float3 CameraPos;     float  _pad;
     float3 CameraForward; float  _pad2;
     float  VpOffX; float VpOffY; float VpSclX; float VpSclY;
-    float  SSAOStrength;  float3 _pad3;
+    float  SSAOStrength;  uint LightCount; uint ClusterGX; uint ClusterGY;
+    uint   ClusterGZ;     uint MaxPerCluster; float ClusterNear; float ClusterFar;
 };
 
 struct LightData {
     float3 Position;  float Type;
     float3 Direction; float Range;
     float3 Color;     float Intensity;
-    float  SpotAngle; float3 _lpad;
+    float  SpotAngle; float ShadowIndex; float2 _lpad;   // ShadowIndex = -1 if no spot shadow
 };
 
-cbuffer Lights : register(b1) {
-    uint      LightCount;
-    float3    _lpad1;
-    LightData Lights[16];
-};
+// All scene lights (no fixed cap), plus the per-cluster light index list built on the CPU.
+// Each cluster occupies (1 + MaxPerCluster) uints: [count, idx0, idx1, ...].
+StructuredBuffer<LightData> Lights        : register(t9);
+StructuredBuffer<uint>      ClusterLights : register(t10);
 
 cbuffer Shadow : register(b2) {
     row_major float4x4 LightViewProj[4];
     float4             CascadeSplits;
+};
+
+cbuffer SpotShadow : register(b3) {
+    row_major float4x4 SpotVP[4];
+    uint               SpotCount;
+    uint3              _spadpad;
 };
 
 Texture2D              RT0           : register(t0);
@@ -35,6 +41,8 @@ TextureCube            IrradianceMap : register(t5);
 TextureCube            PrefilteredEnv: register(t6);
 Texture2D              BRDFLUT       : register(t7);
 Texture2D              SSAOTex       : register(t8);
+Texture2DArray         SpotShadowMap : register(t11);
+TextureCubeArray       PointShadowCube : register(t12);
 SamplerState           PointSamp     : register(s0);
 SamplerComparisonState ShadowSamp    : register(s1);
 SamplerState           IBLSamp       : register(s2);
@@ -94,6 +102,58 @@ float ComputeShadow(float3 wpos) {
     return SampleShadowPCF(cascade, shadowUV, proj.z - bias);
 }
 
+// Spot light shadow: project into the spot's perspective map (atlas slice) and PCF sample.
+float ComputeSpotShadow(uint slice, float3 wpos) {
+    float4 lc = mul(SpotVP[slice], float4(wpos, 1.0));
+    if (lc.w <= 0.0) return 1.0;                       // behind the light → unshadowed
+    float3 proj = lc.xyz / lc.w;
+    float2 uv   = float2(proj.x * 0.5 + 0.5, -proj.y * 0.5 + 0.5);
+    if (any(uv < 0.0) || any(uv > 1.0) || proj.z < 0.0 || proj.z > 1.0)
+        return 1.0;
+    float bias  = 0.0008;
+    float texel = 1.0 / 1024.0;
+    float sh    = 0.0;
+    [unroll] for (int y = -1; y <= 1; ++y)
+    [unroll] for (int x = -1; x <= 1; ++x)
+        sh += SpotShadowMap.SampleCmpLevelZero(
+            ShadowSamp, float3(uv + float2(x, y) * texel, (float)slice), proj.z - bias);
+    return sh / 9.0;
+}
+
+// Point light shadow. The cube stores per-face perspective NDC depth (near=0.05, far=range), which
+// is highly non-linear — comparing it against a constant NDC bias makes shadows pop/flicker as the
+// light↔object distance changes. Instead we sample the raw depth, invert it back to LINEAR view
+// distance (= distance along the dominant axis), and compare in world units with a distance-scaled
+// bias. 5-tap PCF (centre + 4 tangential offsets) softens the edge.
+float ComputePointShadow(uint cubeIndex, float3 wpos, float3 lightPos, float range) {
+    float3 toFrag = wpos - lightPos;
+    float3 a      = abs(toFrag);
+    float  localZ = max(a.x, max(a.y, a.z));      // linear view depth of the dominant face
+    if (localZ <= 1e-4) return 1.0;
+    const float nearZ = 0.05;
+    float farZ = max(range, nearZ + 0.01);
+    float m22  = farZ / (farZ - nearZ);
+    float m23  = -(farZ * nearZ) / (farZ - nearZ);
+
+    // Tangent basis perpendicular to the sampling direction for PCF offsets.
+    float3 up = (a.x <= a.y && a.x <= a.z) ? float3(1, 0, 0)
+              : (a.y <= a.z)               ? float3(0, 1, 0) : float3(0, 0, 1);
+    float3 t = normalize(cross(up, toFrag));
+    float3 b = normalize(cross(toFrag, t));
+    float  offs = localZ * 0.01;
+    float  bias = max(0.03 * localZ, 0.05);       // world-space, distance-independent enough
+
+    float3 taps[5] = { float3(0,0,0), t*offs, -t*offs, b*offs, -b*offs };
+    float sh = 0.0;
+    [unroll] for (int i = 0; i < 5; ++i) {
+        float storedNDC = PointShadowCube.SampleLevel(
+            PointSamp, float4(toFrag + taps[i], (float)cubeIndex), 0).r;
+        float storedLin = m23 / (storedNDC - m22);   // → far when the texel is empty (storedNDC=1)
+        sh += (localZ > storedLin + bias) ? 0.0 : 1.0;
+    }
+    return sh / 5.0;
+}
+
 float4 main(float4 sv : SV_POSITION, float2 uv : TEXCOORD0) : SV_Target {
     float  depth   = Depth.Sample(PointSamp, uv).r;
     if (depth >= 1.0) return float4(0.08, 0.08, 0.1, 1.0);
@@ -111,7 +171,19 @@ float4 main(float4 sv : SV_POSITION, float2 uv : TEXCOORD0) : SV_Target {
     float3 F0      = lerp(float3(0.04, 0.04, 0.04), albedo, metal);
     float3 Lo      = float3(0.0, 0.0, 0.0);
 
-    for (uint i = 0; i < LightCount; ++i) {
+    // Cluster lookup: tile in viewport XY × logarithmic VIEW-Z slice (matches the CPU layout).
+    float2 vpUV = (uv - float2(VpOffX, VpOffY)) / float2(VpSclX, VpSclY);
+    uint cx = min((uint)(saturate(vpUV.x) * ClusterGX), ClusterGX - 1u);
+    uint cy = min((uint)(saturate(vpUV.y) * ClusterGY), ClusterGY - 1u);
+    float viewZ  = max(dot(wpos - CameraPos, CameraForward), ClusterNear);
+    float slicef = log(viewZ / ClusterNear) / log(ClusterFar / ClusterNear) * ClusterGZ;
+    uint  cz     = min((uint)max(slicef, 0.0), ClusterGZ - 1u);
+    uint cluster = (cz * ClusterGY + cy) * ClusterGX + cx;
+    uint base    = cluster * (1u + MaxPerCluster);
+    uint count   = ClusterLights[base];
+
+    for (uint k = 0; k < count; ++k) {
+        uint i = ClusterLights[base + 1u + k];
         LightData light = Lights[i];
         float3 L; float att = 1.0;
         if (light.Type < 0.5) {
@@ -122,6 +194,16 @@ float4 main(float4 sv : SV_POSITION, float2 uv : TEXCOORD0) : SV_Target {
             L   = toL / (d + 0.0001);
             float a = saturate(1.0 - d / max(light.Range, 0.001));
             att = a * a;
+            // Spot cone falloff (Type 2). SpotAngle is the full cone aperture (degrees).
+            if (light.Type > 1.5) {
+                float3 spotDir  = normalize(light.Direction);
+                float  cosAng   = dot(-L, spotDir);                 // light→surface vs spot forward
+                float  halfRad  = radians(light.SpotAngle * 0.5);
+                float  cosOuter = cos(halfRad);
+                float  cosInner = cos(halfRad * 0.85);              // soft edge
+                float  cone     = saturate((cosAng - cosOuter) / max(cosInner - cosOuter, 1e-4));
+                att *= cone * cone;
+            }
         }
         float NdotL = saturate(dot(normal, L));
         float NdotV = saturate(dot(normal, V)) + 0.0001;
@@ -139,7 +221,14 @@ float4 main(float4 sv : SV_POSITION, float2 uv : TEXCOORD0) : SV_Target {
 
             float shadow = 1.0;
             if (light.Type < 0.5)
-                shadow = ComputeShadow(wpos);
+                shadow = ComputeShadow(wpos);                       // directional CSM
+            else if (light.ShadowIndex >= 0.0) {
+                if (light.Type > 1.5)                               // spot
+                    shadow = ComputeSpotShadow((uint)(light.ShadowIndex + 0.5), wpos);
+                else                                                // point
+                    shadow = ComputePointShadow((uint)(light.ShadowIndex + 0.5), wpos,
+                                                 light.Position, light.Range);
+            }
 
             Lo += (diff + spec) * rad * NdotL * shadow;
         }

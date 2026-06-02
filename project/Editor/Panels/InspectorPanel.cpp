@@ -8,11 +8,14 @@
 #include "Engine/Core/ParticleComponent.h"
 #include "Engine/Core/RigidbodyComponent.h"
 #include "Engine/Core/ColliderComponent.h"
+#include "Engine/Core/RotatorComponent.h"
+#include "Engine/Core/PropertyVisitor.h"
 #include "Engine/Renderer/Material/MaterialManager.h"
 #include "Engine/Math/Math.h"
 #include "imgui.h"
 #include <cmath>
 #include <cstring>
+#include <string>
 
 namespace Fujin {
 
@@ -36,6 +39,7 @@ void InspectorPanel::Draw(Actor* actor) {
     DrawParticle(actor);
     DrawRigidbody(actor);
     DrawCollider(actor);
+    DrawReflectedComponents(actor);
 
     // Add Component popup
     ImGui::Separator();
@@ -58,6 +62,8 @@ void InspectorPanel::Draw(Actor* actor) {
             actor->AddComponent<RigidbodyComponent>();
         if (!actor->HasComponent<ColliderComponent>() && ImGui::MenuItem("Collider"))
             actor->AddComponent<ColliderComponent>();
+        if (!actor->HasComponent<RotatorComponent>() && ImGui::MenuItem("Rotator (Script)"))
+            actor->AddComponent<RotatorComponent>();
         ImGui::EndPopup();
     }
 
@@ -135,7 +141,12 @@ void InspectorPanel::DrawTransform(Actor* actor) {
 void InspectorPanel::DrawMesh(Actor* actor) {
     auto* m = actor->GetComponent<MeshComponent>();
     if (!m) return;
-    if (!ImGui::CollapsingHeader("Mesh Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Mesh Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##mesh_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<MeshComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<MeshComponent>()) return;
 
     char pathBuf[256] = {};
     strncpy_s(pathBuf, sizeof(pathBuf), m->MeshPath.c_str(), _TRUNCATE);
@@ -163,7 +174,17 @@ void InspectorPanel::DrawMesh(Actor* actor) {
     // Per-mesh render flags
     ImGui::Checkbox("Double Sided", &m->DoubleSided);
     ImGui::SameLine();
-    ImGui::Checkbox("Alpha Clip",   &m->AlphaClip);
+    ImGui::Checkbox("Cast Shadow", &m->CastShadow);
+    {
+        static const char* kBlendLabels[] = { "Opaque", "Alpha Clip", "Translucent" };
+        int blendIdx = static_cast<int>(m->Blend);
+        if (ImGui::Combo("Blend", &blendIdx, kBlendLabels, 3))
+            m->Blend = static_cast<MeshBlendMode>(blendIdx);
+    }
+    if (m->Blend == MeshBlendMode::Translucent) {
+        ImGui::SameLine();
+        ImGui::SliderFloat("Opacity", &m->Opacity, 0.0f, 1.0f);
+    }
 
     // If no path is set, offer a quick "New" button.
     if (m->MaterialPath.empty()) {
@@ -250,7 +271,12 @@ void InspectorPanel::DrawMaterialProps(Material* mat) {
 void InspectorPanel::DrawAnimation(Actor* actor) {
     auto* a = actor->GetComponent<AnimationComponent>();
     if (!a) return;
-    if (!ImGui::CollapsingHeader("Animation Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Animation Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##anim_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<AnimationComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<AnimationComponent>()) return;
 
     char clipBuf[128] = {};
     strncpy_s(clipBuf, sizeof(clipBuf), a->ClipName.c_str(), _TRUNCATE);
@@ -268,7 +294,12 @@ void InspectorPanel::DrawAnimation(Actor* actor) {
 void InspectorPanel::DrawLight(Actor* actor) {
     auto* l = actor->GetComponent<LightComponent>();
     if (!l) return;
-    if (!ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##light_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<LightComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<LightComponent>()) return;
 
     const char* types[] = { "Directional", "Point", "Spot" };
     int typeIndex = static_cast<int>(l->Type);
@@ -281,12 +312,19 @@ void InspectorPanel::DrawLight(Actor* actor) {
         ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 1000.0f);
     if (l->Type == LightType::Spot)
         ImGui::DragFloat("Spot Angle", &l->SpotAngle, 0.5f, 1.0f, 179.0f);
+    if (l->Type != LightType::Directional)
+        ImGui::Checkbox("Cast Shadows", &l->CastShadows);
 }
 
 void InspectorPanel::DrawCamera(Actor* actor) {
     auto* c = actor->GetComponent<CameraComponent>();
     if (!c) return;
-    if (!ImGui::CollapsingHeader("Camera Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Camera Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##camera_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<CameraComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<CameraComponent>()) return;
 
     ImGui::DragFloat("FOV",       &c->FOV,      0.5f,  1.0f, 179.0f);
     ImGui::DragFloat("Near Clip", &c->NearClip, 0.001f, 0.001f, 10.0f);
@@ -297,7 +335,12 @@ void InspectorPanel::DrawCamera(Actor* actor) {
 void InspectorPanel::DrawParticle(Actor* actor) {
     auto* pc = actor->GetComponent<ParticleComponent>();
     if (!pc) return;
-    if (!ImGui::CollapsingHeader("Particle Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Particle Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##particle_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<ParticleComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<ParticleComponent>()) return;
 
     ImGui::Text("Emitters: %d", static_cast<int>(pc->GetEmitters().size()));
     ImGui::SameLine();
@@ -325,12 +368,18 @@ void InspectorPanel::DrawParticle(Actor* actor) {
 void InspectorPanel::DrawRigidbody(Actor* actor) {
     auto* rb = actor->GetComponent<RigidbodyComponent>();
     if (!rb) return;
-    if (!ImGui::CollapsingHeader("Rigidbody Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Rigidbody Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##rb_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<RigidbodyComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<RigidbodyComponent>()) return;
 
     ImGui::DragFloat("Mass",           &rb->Mass,          0.01f, 0.001f, 10000.0f);
     ImGui::DragFloat("Restitution",    &rb->Restitution,   0.01f, 0.0f,   1.0f);
     ImGui::DragFloat("Friction",       &rb->Friction,      0.01f, 0.0f,   1.0f);
-    ImGui::DragFloat("Linear Damping", &rb->LinearDamping, 0.001f,0.0f,   1.0f);
+    ImGui::DragFloat("Linear Damping",  &rb->LinearDamping,  0.001f, 0.0f, 1.0f);
+    ImGui::DragFloat("Angular Damping", &rb->AngularDamping, 0.001f, 0.0f, 1.0f);
     ImGui::Checkbox("Kinematic", &rb->IsKinematic);
     ImGui::SameLine();
     ImGui::Checkbox("Gravity",   &rb->UseGravity);
@@ -340,7 +389,12 @@ void InspectorPanel::DrawRigidbody(Actor* actor) {
 void InspectorPanel::DrawCollider(Actor* actor) {
     auto* col = actor->GetComponent<ColliderComponent>();
     if (!col) return;
-    if (!ImGui::CollapsingHeader("Collider Component", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    bool open = ImGui::CollapsingHeader("Collider Component", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::BeginPopupContextItem("##collider_ctx")) {
+        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<ColliderComponent>();
+        ImGui::EndPopup();
+    }
+    if (!open || !actor->HasComponent<ColliderComponent>()) return;
 
     const char* shapes[] = { "Sphere", "AABB", "Capsule" };
     int shapeIdx = static_cast<int>(col->Shape);
@@ -361,6 +415,81 @@ void InspectorPanel::DrawCollider(Actor* actor) {
         ImGui::DragFloat("Radius",      &col->Radius,     0.01f, 0.001f, 1000.0f);
         ImGui::DragFloat("Half Height", &col->HalfHeight, 0.01f, 0.001f, 1000.0f);
         break;
+    }
+
+    // ── Collision channel & response ──────────────────────────────────────────
+    ImGui::Separator();
+    static const char* kChannelNames[] = {
+        "WorldStatic", "WorldDynamic", "Pawn", "Projectile", "Custom1", "Custom2" };
+    static const char* kRespNames[] = { "Ignore", "Overlap", "Block" };
+
+    int ch = static_cast<int>(col->Channel);
+    if (ImGui::Combo("Channel", &ch, kChannelNames, kChannelCount))
+        col->Channel = static_cast<CollisionChannel>(ch);
+
+    if (ImGui::TreeNode("Collision Responses")) {
+        for (int i = 0; i < kChannelCount; ++i) {
+            int r = static_cast<int>(col->Responses[static_cast<size_t>(i)]);
+            ImGui::PushID(i);
+            if (ImGui::Combo(kChannelNames[i], &r, kRespNames, 3))
+                col->Responses[static_cast<size_t>(i)] = static_cast<CollisionResponse>(r);
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+}
+
+// File-local property visitors backing the generic reflection Inspector.
+namespace {
+
+// Counts how many properties a component exposes (so we only draw a header when there are any).
+struct CountVisitor : IPropertyVisitor {
+    int count = 0;
+    void Float(const char*, float*, float, float, float) override { ++count; }
+    void Int  (const char*, int*, int, int)              override { ++count; }
+    void Bool (const char*, bool*)                       override { ++count; }
+    void Vec3 (const char*, Vector3*, float)             override { ++count; }
+    void Color(const char*, Vector3*)                    override { ++count; }
+    void Text (const char*, std::string*)                override { ++count; }
+};
+
+// Renders each property with the matching ImGui widget. min>=max ⇒ unbounded drag.
+struct ImGuiVisitor : IPropertyVisitor {
+    void Float(const char* n, float* v, float speed, float mn, float mx) override {
+        ImGui::DragFloat(n, v, speed, mn, mx);
+    }
+    void Int(const char* n, int* v, int mn, int mx) override {
+        if (mn < mx) ImGui::SliderInt(n, v, mn, mx); else ImGui::DragInt(n, v);
+    }
+    void Bool(const char* n, bool* v)            override { ImGui::Checkbox(n, v); }
+    void Vec3(const char* n, Vector3* v, float s) override { ImGui::DragFloat3(n, &v->x, s); }
+    void Color(const char* n, Vector3* v)        override { ImGui::ColorEdit3(n, &v->x); }
+    void Text(const char* n, std::string* v) override {
+        char buf[256] = {};
+        strncpy_s(buf, sizeof(buf), v->c_str(), _TRUNCATE);
+        if (ImGui::InputText(n, buf, sizeof(buf))) *v = buf;
+    }
+};
+
+} // namespace
+
+void InspectorPanel::DrawReflectedComponents(Actor* actor) {
+    for (auto& c : actor->GetComponents()) {
+        Component* comp = c.get();
+        CountVisitor cv; comp->Reflect(cv);
+        if (cv.count == 0) continue;   // no reflected props → a bespoke DrawXxx handles it (or none)
+
+        ImGui::PushID(comp);
+        bool open    = ImGui::CollapsingHeader(comp->GetTypeName(), ImGuiTreeNodeFlags_DefaultOpen);
+        bool removed = false;
+        if (ImGui::BeginPopupContextItem("##refl_ctx")) {
+            if (ImGui::MenuItem("Remove Component")) removed = true;
+            ImGui::EndPopup();
+        }
+        if (open && !removed) { ImGuiVisitor iv; comp->Reflect(iv); }
+        ImGui::PopID();
+        // Erase only after all ImGui calls + PopID; then stop — the removal invalidates the iterator.
+        if (removed) { actor->RemoveComponent(comp); break; }
     }
 }
 
