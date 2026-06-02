@@ -124,6 +124,36 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Unindent(12.0f);
     }
 
+    // ── Height Fog ─────────────────────────────────────────────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool fogOpen = ImGui::CollapsingHeader("Height Fog", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##fog_en", &pp->FogEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("指数ハイトフォグ＋太陽インスキャッタ 有効/無効");
+
+    if (fogOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::BeginDisabled(!pp->FogEnabled);
+        ImGui::DragFloat("Density",        &pp->FogDensity,       0.001f, 0.0f, 1.0f, "%.3f");
+        ImGui::DragFloat("Height Falloff", &pp->FogHeightFalloff, 0.01f,  0.0f, 5.0f, "%.2f");
+        ImGui::DragFloat("Fog Height",     &pp->FogHeight,        0.1f, -100.0f, 100.0f, "%.1f");
+        ImGui::SliderFloat("Max Opacity",  &pp->FogMaxOpacity,    0.0f, 1.0f, "%.2f");
+        ImGui::DragFloat("Inscatter Exp",  &pp->FogInscatterExp,  0.2f, 1.0f, 64.0f, "%.1f");
+        ImGui::ColorEdit3("Fog Color",       pp->FogColor);
+        ImGui::ColorEdit3("Inscatter Color", pp->FogInscatterColor);
+        ImGui::TextDisabled("太陽方向を向くとフォグが発光");
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Volumetric (God Rays)");
+        ImGui::SliderInt("Steps",       &pp->GodRaySteps,     0, 128);
+        ImGui::DragFloat("Intensity##gr", &pp->GodRayIntensity, 0.01f, 0.0f, 5.0f, "%.2f");
+        ImGui::DragFloat("Max Dist##gr",  &pp->GodRayMaxDist,   0.5f,  1.0f, 500.0f, "%.0f");
+        ImGui::SliderFloat("Scattering G", &pp->GodRayG,        -0.9f, 0.9f, "%.2f");
+        ImGui::TextDisabled("Steps=0で無効。物陰から光芒（太陽CSM）");
+        ImGui::EndDisabled();
+        ImGui::Unindent(12.0f);
+    }
+
     ImGui::End();
 }
 

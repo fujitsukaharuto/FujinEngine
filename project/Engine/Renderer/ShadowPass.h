@@ -2,9 +2,11 @@
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Asset/TextureManager.h"
 #include "Engine/Math/Math.h"
+#include "Engine/Spatial/Bvh.h"   // Aabb
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstdint>
+#include <vector>
 
 
 namespace Fujin {
@@ -12,6 +14,27 @@ namespace Fujin {
 class SceneManager;
 class GeometryManager;
 class MaterialManager;
+struct MeshAsset;
+struct SkeletalMeshAsset;
+
+// A resolved shadow caster, gathered once per frame by SceneRenderer and shared by every shadow
+// pass (cascade/spot/point) for both rendering and the cache dirty-hash. Avoids re-resolving
+// components/assets per light per face.
+struct ShadowCaster {
+    const MeshAsset*         mesh  = nullptr;   // non-skinned
+    const SkeletalMeshAsset* smesh = nullptr;   // skinned
+    Matrix4x4 world;
+    Aabb      box;                              // world AABB (non-skinned only)
+    Vector3   center;                           // box center (non-skinned)
+    float     radius = 0.0f;                    // bounding radius (non-skinned)
+    int       kind   = 0;                       // 0=static, 1=alphaClip, 2=skinned
+    bool      doubleSided = false;
+    uint32_t  albedoSlot  = 0;                  // alphaClip
+    uint32_t  skinSlot    = 0;                  // skinned (palette slot)
+    const Matrix4x4* palette = nullptr;         // skinned bone palette (valid for the frame)
+    uint64_t  actorId     = 0;
+    bool      skeletal    = false;
+};
 
 struct ShadowData {
     Matrix4x4 LightViewProj[4];
@@ -24,7 +47,8 @@ struct ShadowData {
 struct SpotShadowData {
     static constexpr uint32_t MAX = 4;   // budget = ShadowPass::MAX_SHADOW_SPOTS
     Matrix4x4 ViewProj[MAX];
-    uint32_t  Count = 0;
+    bool      NeedsRender[MAX] = {};     // per-slot cache dirty flag (Stage C)
+    uint32_t  Count = 0;                 // number of occupied slots
 };
 
 // Point light shadows (Stage B). Each shadow-casting point light gets a depth cube (6 faces) in a
@@ -34,7 +58,8 @@ struct PointShadowData {
     static constexpr uint32_t MAX = 4;   // budget = ShadowPass::MAX_SHADOW_POINTS
     Vector3   Pos[MAX];                  // world position (cube center)
     float     Range[MAX];                // = far plane of the face projection
-    uint32_t  Count = 0;
+    bool      NeedsRender[MAX] = {};     // per-slot cache dirty flag (Stage C)
+    uint32_t  Count = 0;                 // number of occupied slots
 };
 
 class ShadowPass {
@@ -47,6 +72,14 @@ public:
     static constexpr uint32_t POINT_MAP_SIZE    = 512;                   // per cube face
 
     bool Initialize(GraphicsDevice& gfx);
+
+    // Gather all shadow casters once per frame (honours MeshComponent::CastShadow). Shared by the
+    // spot/point passes and the cache dirty-hash. Skinned slots match the bone-palette upload order.
+    static void BuildCasters(const SceneManager& scene,
+                             GeometryManager& geoMgr,
+                             TextureManager& texMgr,
+                             MaterialManager& matMgr,
+                             std::vector<ShadowCaster>& out);
 
     // Full execute: computes cascades + GPU draw + internal barrier transitions.
     // Kept for use outside the RenderGraph path.
@@ -88,22 +121,16 @@ public:
     // GPU-only: render the depth of all (frustum-culled) casters into each active spot slice.
     // No barrier insertion — assumes the spot atlas is already in DEPTH_WRITE.
     void ExecuteSpotGPU(ID3D12GraphicsCommandList* cmd,
-                        const SceneManager& scene,
                         uint32_t frameIndex,
-                        GeometryManager& geoMgr,
-                        TextureManager& texMgr,
-                        MaterialManager& matMgr,
+                        const std::vector<ShadowCaster>& casters,
                         GraphicsDevice& gfx,
                         const SpotShadowData& data);
 
     // --- Point light shadows (Stage B) ---
     // GPU-only: render 6 cube faces of depth per active point light. No barrier insertion.
     void ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
-                         const SceneManager& scene,
                          uint32_t frameIndex,
-                         GeometryManager& geoMgr,
-                         TextureManager& texMgr,
-                         MaterialManager& matMgr,
+                         const std::vector<ShadowCaster>& casters,
                          GraphicsDevice& gfx,
                          const PointShadowData& data);
 

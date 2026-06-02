@@ -128,6 +128,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     // --- CPU: find directional light ---
     Vector3 lightDir(0.3f, -1.0f, 0.5f);
     lightDir = lightDir.GetSafeNormal();
+    Vector3 sunColor(1.0f, 1.0f, 1.0f);   // for fog inscattering
     for (auto& actorPtr : scene.GetActors()) {
         auto* lc = actorPtr->GetComponent<LightComponent>();
         if (!lc || lc->Type != LightType::Directional) continue;
@@ -138,6 +139,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
             Matrix4x4 rotMat = tc->CachedWorld.Rotation.ToMatrix();
             lightDir = Vector3(rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2]).GetSafeNormal();
         }
+        sunColor = lc->Color * lc->Intensity;
         break;
     }
 
@@ -178,13 +180,29 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     ShadowData shadowData;
     m_shadowPass.ComputeCascades(invViewProj, CAMERA_NEAR, CAMERA_FAR, lightDir, shadowData);
 
-    // --- CPU: select shadow-casting spot/point lights (opt-in; nearest within budget) ---
-    m_lightingPass.PrepareSpotShadows(scene, CameraPos);
+    // --- CPU: shadow-casting spot/point lights (opt-in; nearest within budget) + static cache ---
+    // Build the shared caster list first (Prepare* needs it for the cache dirty-hash), but only if
+    // any shadow-casting non-directional light exists — otherwise the gather is pure waste.
+    bool anyShadowLight = false;
+    for (auto& ap : scene.GetActors()) {
+        auto* lc = ap->GetComponent<LightComponent>();
+        if (lc && lc->CastShadows && lc->Type != LightType::Directional) { anyShadowLight = true; break; }
+    }
+    if (anyShadowLight) ShadowPass::BuildCasters(scene, m_geoMgr, m_texMgr, m_matMgr, m_shadowCasters);
+    else                m_shadowCasters.clear();
+
+    m_lightingPass.PrepareSpotShadows(scene, CameraPos, m_shadowCasters);
     const SpotShadowData& spotData = m_lightingPass.GetSpotData();
     const bool hasSpotShadows = spotData.Count > 0;
-    m_lightingPass.PreparePointShadows(scene, CameraPos);
+    m_lightingPass.PreparePointShadows(scene, CameraPos, m_shadowCasters);
     const PointShadowData& pointData = m_lightingPass.GetPointData();
     const bool hasPointShadows = pointData.Count > 0;
+
+    // Cache: only re-render the shadow pass when at least one slot is dirty (light/caster changed).
+    bool anySpotDirty = false;
+    for (uint32_t s = 0; s < spotData.Count; ++s) anySpotDirty |= spotData.NeedsRender[s];
+    bool anyPointDirty = false;
+    for (uint32_t s = 0; s < pointData.Count; ++s) anyPointDirty |= pointData.NeedsRender[s];
 
     // --- SSAO (one-frame lag): runs before RG using previous frame's GBuffer/depth ---
     // Transition GBuffer RT1 and depth to compute-shader SRV state
@@ -236,12 +254,14 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                     D3D12_RESOURCE_STATE_DEPTH_WRITE);
     RGHandle hShadow = m_rg.Import("ShadowMap", m_shadowPass.GetShadowMap(),
                                     D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    const bool runSpotPass  = hasSpotShadows  && anySpotDirty;
+    const bool runPointPass = hasPointShadows && anyPointDirty;
     RGHandle hSpotShadow{};
-    if (hasSpotShadows)
+    if (runSpotPass)
         hSpotShadow = m_rg.Import("SpotShadowMap", m_shadowPass.GetSpotMap(),
-                                  D3D12_RESOURCE_STATE_DEPTH_WRITE);
+                                  D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);  // created in PSR
     RGHandle hPointShadow{};
-    if (hasPointShadows)
+    if (runPointPass)
         hPointShadow = m_rg.Import("PointShadowMap", m_shadowPass.GetPointMap(),
                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);  // created in PSR
 
@@ -264,37 +284,35 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
             m_shadowPass.ExecuteGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, shadowData);
         });
 
-    // Spot shadow pass (opt-in): render each shadow-casting spot's depth. Skipped when none.
-    if (hasSpotShadows) {
+    // Spot shadow pass: render only dirty slots; skipped entirely when all slots are cached.
+    if (runSpotPass) {
         m_rg.AddPass("SpotShadowPass",
             {},
             { AsDSV(hSpotShadow) },
             [&, spotData, frameIndex](ID3D12GraphicsCommandList* c) {
-                m_shadowPass.ExecuteSpotGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, spotData);
+                m_shadowPass.ExecuteSpotGPU(c, frameIndex, m_shadowCasters, gfx, spotData);
             });
     }
 
-    // Spot shadow pass (opt-in): render each shadow-casting point's depth cube. Skipped when none.
-    if (hasPointShadows) {
+    // Point shadow pass: render only dirty cubes; skipped entirely when all are cached.
+    if (runPointPass) {
         m_rg.AddPass("PointShadowPass",
             {},
             { AsDSV(hPointShadow) },
             [&, pointData, frameIndex](ID3D12GraphicsCommandList* c) {
-                m_shadowPass.ExecutePointGPU(c, scene, frameIndex, m_geoMgr, m_texMgr, m_matMgr, gfx, pointData);
+                m_shadowPass.ExecutePointGPU(c, frameIndex, m_shadowCasters, gfx, pointData);
             });
     }
 
-    // When no spot shadows this frame, bind the (always-PSR) cascade map as a harmless placeholder
-    // at t11 so we never bind a DEPTH_WRITE resource as an SRV. The shader never samples it because
-    // every light's ShadowIndex is -1 in that case.
-    uint32_t spotSRVSlot = hasSpotShadows ? m_shadowPass.GetSpotSRVSlot() : m_shadowPass.GetSRVSlot();
-    // Point cube atlas is created in PSR and left in PSR by the RG, so it is always safe to bind.
+    // Both shadow maps are created in PSR and left in PSR by the RG, so binding their SRVs is always
+    // safe — even on frames where the pass is skipped (Count==0 or all slots cached).
+    uint32_t spotSRVSlot  = m_shadowPass.GetSpotSRVSlot();
     uint32_t pointSRVSlot = m_shadowPass.GetPointSRVSlot();
 
     // Lighting pass: reads GBuffer + depth + shadow maps, writes to HDR render target.
     std::vector<RGHandle> lightReads = { hGB0, hGB1, hGB2, hDepth, hShadow };
-    if (hasSpotShadows)  lightReads.push_back(hSpotShadow);
-    if (hasPointShadows) lightReads.push_back(hPointShadow);
+    if (runSpotPass)  lightReads.push_back(hSpotShadow);
+    if (runPointPass) lightReads.push_back(hPointShadow);
 
     D3D12_CPU_DESCRIPTOR_HANDLE hdrRTV = m_postProcess.GetHDRRTV();
     m_rg.AddPass("LightingPass",
@@ -355,6 +373,14 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
         m_particlePass.Execute(cmd, gfx, scene, viewProj, particleView,
                                evpX, evpY, evpW, evpH, frameIndex, m_totalTime, dt);
     }
+
+    // Height fog (no-op unless enabled): exponential height fog + sun inscatter + optional volumetric
+    // god rays (directional CSM ray-march). Composited into the HDR RT.
+    m_postProcess.ExecuteFog(cmd, gfx,
+                             gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                             invViewProj, CameraPos, cameraForward, lightDir, sunColor,
+                             m_shadowPass.GetSRVSlot(), shadowData.LightViewProj, shadowData.CascadeSplits,
+                             frameIndex, evpX, evpY, evpW, evpH);
 
     // SSR (no-op unless enabled): composites screen-space reflections into the HDR RT.
     m_postProcess.ExecuteSSR(cmd, gfx, m_gbuffer,

@@ -83,45 +83,6 @@
         {
           "position": [
             0.0,
-            3.5,
-            5.0
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            1.0,
-            1.0,
-            1.0
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "castShadows": true,
-          "color": [
-            1.0,
-            0.949999988079071,
-            0.8500000238418579
-          ],
-          "intensity": 9.0,
-          "lightType": "Point",
-          "range": 14.0,
-          "spotAngle": 45.0,
-          "type": "LightComponent"
-        }
-      ],
-      "id": 3,
-      "name": "ShadowPoint",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            0.0,
             0.0,
             5.0
           ],
@@ -152,7 +113,7 @@
           "type": "RotatorComponent"
         }
       ],
-      "id": 4,
+      "id": 3,
       "name": "Cube",
       "parentId": 0
     },
@@ -187,9 +148,9 @@
           "type": "MeshComponent"
         }
       ],
-      "id": 5,
+      "id": 4,
       "name": "CubeChild",
-      "parentId": 4
+      "parentId": 3
     },
     {
       "components": [
@@ -248,7 +209,7 @@
           "type": "ColliderComponent"
         }
       ],
-      "id": 6,
+      "id": 5,
       "name": "Ground",
       "parentId": 0
     },
@@ -291,7 +252,7 @@
           "type": "AnimationComponent"
         }
       ],
-      "id": 7,
+      "id": 6,
       "name": "RunCharacter_A",
       "parentId": 0
     },
@@ -334,7 +295,7 @@
           "type": "AnimationComponent"
         }
       ],
-      "id": 8,
+      "id": 7,
       "name": "RunCharacter_B",
       "parentId": 0
     },
@@ -377,7 +338,7 @@
           "type": "AnimationComponent"
         }
       ],
-      "id": 9,
+      "id": 8,
       "name": "RunCharacter_C",
       "parentId": 0
     },
@@ -408,7 +369,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 10,
+      "id": 9,
       "name": "SteamEmitter",
       "parentId": 0
     },
@@ -439,7 +400,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 11,
+      "id": 10,
       "name": "SparkEmitter",
       "parentId": 0
     },
@@ -470,7 +431,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 12,
+      "id": 11,
       "name": "BeamEmitter",
       "parentId": 0
     },
@@ -501,7 +462,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 13,
+      "id": 12,
       "name": "GPUFireEmitter",
       "parentId": 0
     },
@@ -562,7 +523,7 @@
           "type": "ColliderComponent"
         }
       ],
-      "id": 14,
+      "id": 13,
       "name": "Ramp",
       "parentId": 0
     },
@@ -633,7 +594,7 @@
           "useGravity": true
         }
       ],
-      "id": 15,
+      "id": 14,
       "name": "RampBall",
       "parentId": 0
     },
@@ -704,7 +665,7 @@
           "useGravity": true
         }
       ],
-      "id": 16,
+      "id": 15,
       "name": "RampBox",
       "parentId": 0
     },
@@ -775,7 +736,7 @@
           "useGravity": true
         }
       ],
-      "id": 17,
+      "id": 16,
       "name": "StackBoxLower",
       "parentId": 0
     },
@@ -846,7 +807,7 @@
           "useGravity": true
         }
       ],
-      "id": 18,
+      "id": 17,
       "name": "StackBoxUpper",
       "parentId": 0
     },
@@ -917,7 +878,7 @@
           "useGravity": true
         }
       ],
-      "id": 19,
+      "id": 18,
       "name": "RampSphere_0",
       "parentId": 0
     },
@@ -988,7 +949,7 @@
           "useGravity": true
         }
       ],
-      "id": 20,
+      "id": 19,
       "name": "RampSphere_1",
       "parentId": 0
     },
@@ -1059,7 +1020,7 @@
           "useGravity": true
         }
       ],
-      "id": 21,
+      "id": 20,
       "name": "RampSphere_2",
       "parentId": 0
     },
@@ -1130,7 +1091,7 @@
           "useGravity": true
         }
       ],
-      "id": 22,
+      "id": 21,
       "name": "RampSphere_3",
       "parentId": 0
     },
@@ -1201,7 +1162,7 @@
           "useGravity": true
         }
       ],
-      "id": 23,
+      "id": 22,
       "name": "RampSphere_4",
       "parentId": 0
     },
@@ -1272,7 +1233,7 @@
           "useGravity": true
         }
       ],
-      "id": 24,
+      "id": 23,
       "name": "RampSphere_5",
       "parentId": 0
     },
@@ -1343,7 +1304,7 @@
           "useGravity": true
         }
       ],
-      "id": 25,
+      "id": 24,
       "name": "RampSphere_6",
       "parentId": 0
     },
@@ -1414,7 +1375,7 @@
           "useGravity": true
         }
       ],
-      "id": 26,
+      "id": 25,
       "name": "RampSphere_7",
       "parentId": 0
     },
@@ -1485,7 +1446,7 @@
           "useGravity": true
         }
       ],
-      "id": 27,
+      "id": 26,
       "name": "RampSphere_8",
       "parentId": 0
     },
@@ -1556,7 +1517,7 @@
           "useGravity": true
         }
       ],
-      "id": 28,
+      "id": 27,
       "name": "RampSphere_9",
       "parentId": 0
     },
@@ -1627,7 +1588,7 @@
           "useGravity": true
         }
       ],
-      "id": 29,
+      "id": 28,
       "name": "RampSphere_10",
       "parentId": 0
     },
@@ -1698,7 +1659,7 @@
           "useGravity": true
         }
       ],
-      "id": 30,
+      "id": 29,
       "name": "RampSphere_11",
       "parentId": 0
     },
@@ -1769,7 +1730,7 @@
           "useGravity": true
         }
       ],
-      "id": 31,
+      "id": 30,
       "name": "RampSphere_12",
       "parentId": 0
     },
@@ -1840,7 +1801,7 @@
           "useGravity": true
         }
       ],
-      "id": 32,
+      "id": 31,
       "name": "RampSphere_13",
       "parentId": 0
     },
@@ -1911,7 +1872,7 @@
           "useGravity": true
         }
       ],
-      "id": 33,
+      "id": 32,
       "name": "RampSphere_14",
       "parentId": 0
     },
@@ -1982,7 +1943,7 @@
           "useGravity": true
         }
       ],
-      "id": 34,
+      "id": 33,
       "name": "RampSphere_15",
       "parentId": 0
     },
@@ -2053,7 +2014,7 @@
           "useGravity": true
         }
       ],
-      "id": 35,
+      "id": 34,
       "name": "RampSphere_16",
       "parentId": 0
     },
@@ -2124,7 +2085,7 @@
           "useGravity": true
         }
       ],
-      "id": 36,
+      "id": 35,
       "name": "RampSphere_17",
       "parentId": 0
     },
@@ -2195,7 +2156,7 @@
           "useGravity": true
         }
       ],
-      "id": 37,
+      "id": 36,
       "name": "RampSphere_18",
       "parentId": 0
     },
@@ -2266,7 +2227,7 @@
           "useGravity": true
         }
       ],
-      "id": 38,
+      "id": 37,
       "name": "RampSphere_19",
       "parentId": 0
     },
@@ -2337,7 +2298,7 @@
           "useGravity": true
         }
       ],
-      "id": 39,
+      "id": 38,
       "name": "RampSphere_20",
       "parentId": 0
     },
@@ -2408,7 +2369,7 @@
           "useGravity": true
         }
       ],
-      "id": 40,
+      "id": 39,
       "name": "RampSphere_21",
       "parentId": 0
     },
@@ -2479,7 +2440,7 @@
           "useGravity": true
         }
       ],
-      "id": 41,
+      "id": 40,
       "name": "RampSphere_22",
       "parentId": 0
     },
@@ -2550,7 +2511,7 @@
           "useGravity": true
         }
       ],
-      "id": 42,
+      "id": 41,
       "name": "RampSphere_23",
       "parentId": 0
     },
@@ -2621,7 +2582,7 @@
           "useGravity": true
         }
       ],
-      "id": 43,
+      "id": 42,
       "name": "RampSphere_24",
       "parentId": 0
     },
@@ -2692,7 +2653,7 @@
           "useGravity": true
         }
       ],
-      "id": 44,
+      "id": 43,
       "name": "RampSphere_25",
       "parentId": 0
     },
@@ -2763,7 +2724,7 @@
           "useGravity": true
         }
       ],
-      "id": 45,
+      "id": 44,
       "name": "RampSphere_26",
       "parentId": 0
     },
@@ -2834,7 +2795,7 @@
           "useGravity": true
         }
       ],
-      "id": 46,
+      "id": 45,
       "name": "RampSphere_27",
       "parentId": 0
     },
@@ -2905,7 +2866,7 @@
           "useGravity": true
         }
       ],
-      "id": 47,
+      "id": 46,
       "name": "RampSphere_28",
       "parentId": 0
     },
@@ -2976,7 +2937,7 @@
           "useGravity": true
         }
       ],
-      "id": 48,
+      "id": 47,
       "name": "RampSphere_29",
       "parentId": 0
     },
@@ -3047,7 +3008,7 @@
           "useGravity": true
         }
       ],
-      "id": 49,
+      "id": 48,
       "name": "RampSphere_30",
       "parentId": 0
     },
@@ -3118,7 +3079,7 @@
           "useGravity": true
         }
       ],
-      "id": 50,
+      "id": 49,
       "name": "RampSphere_31",
       "parentId": 0
     },
@@ -3189,7 +3150,7 @@
           "useGravity": true
         }
       ],
-      "id": 51,
+      "id": 50,
       "name": "RampSphere_32",
       "parentId": 0
     },
@@ -3260,7 +3221,7 @@
           "useGravity": true
         }
       ],
-      "id": 52,
+      "id": 51,
       "name": "RampSphere_33",
       "parentId": 0
     },
@@ -3331,7 +3292,7 @@
           "useGravity": true
         }
       ],
-      "id": 53,
+      "id": 52,
       "name": "RampSphere_34",
       "parentId": 0
     },
@@ -3402,7 +3363,7 @@
           "useGravity": true
         }
       ],
-      "id": 54,
+      "id": 53,
       "name": "RampSphere_35",
       "parentId": 0
     },
@@ -3473,7 +3434,7 @@
           "useGravity": true
         }
       ],
-      "id": 55,
+      "id": 54,
       "name": "RampSphere_36",
       "parentId": 0
     },
@@ -3544,7 +3505,7 @@
           "useGravity": true
         }
       ],
-      "id": 56,
+      "id": 55,
       "name": "RampSphere_37",
       "parentId": 0
     },
@@ -3615,7 +3576,7 @@
           "useGravity": true
         }
       ],
-      "id": 57,
+      "id": 56,
       "name": "RampSphere_38",
       "parentId": 0
     },
@@ -3686,7 +3647,7 @@
           "useGravity": true
         }
       ],
-      "id": 58,
+      "id": 57,
       "name": "RampSphere_39",
       "parentId": 0
     },
@@ -3757,7 +3718,7 @@
           "useGravity": true
         }
       ],
-      "id": 59,
+      "id": 58,
       "name": "RampSphere_40",
       "parentId": 0
     },
@@ -3828,7 +3789,7 @@
           "useGravity": true
         }
       ],
-      "id": 60,
+      "id": 59,
       "name": "RampSphere_41",
       "parentId": 0
     },
@@ -3899,7 +3860,7 @@
           "useGravity": true
         }
       ],
-      "id": 61,
+      "id": 60,
       "name": "RampSphere_42",
       "parentId": 0
     },
@@ -3970,7 +3931,7 @@
           "useGravity": true
         }
       ],
-      "id": 62,
+      "id": 61,
       "name": "RampSphere_43",
       "parentId": 0
     },
@@ -4041,7 +4002,7 @@
           "useGravity": true
         }
       ],
-      "id": 63,
+      "id": 62,
       "name": "RampSphere_44",
       "parentId": 0
     },
@@ -4112,7 +4073,7 @@
           "useGravity": true
         }
       ],
-      "id": 64,
+      "id": 63,
       "name": "RampSphere_45",
       "parentId": 0
     },
@@ -4183,7 +4144,7 @@
           "useGravity": true
         }
       ],
-      "id": 65,
+      "id": 64,
       "name": "RampSphere_46",
       "parentId": 0
     },
@@ -4254,7 +4215,7 @@
           "useGravity": true
         }
       ],
-      "id": 66,
+      "id": 65,
       "name": "RampSphere_47",
       "parentId": 0
     },
@@ -4325,7 +4286,7 @@
           "useGravity": true
         }
       ],
-      "id": 67,
+      "id": 66,
       "name": "RampSphere_48",
       "parentId": 0
     },
@@ -4396,7 +4357,7 @@
           "useGravity": true
         }
       ],
-      "id": 68,
+      "id": 67,
       "name": "RampSphere_49",
       "parentId": 0
     },
@@ -4467,7 +4428,7 @@
           "useGravity": true
         }
       ],
-      "id": 69,
+      "id": 68,
       "name": "RampSphere_50",
       "parentId": 0
     },
@@ -4538,7 +4499,7 @@
           "useGravity": true
         }
       ],
-      "id": 70,
+      "id": 69,
       "name": "RampSphere_51",
       "parentId": 0
     },
@@ -4609,7 +4570,7 @@
           "useGravity": true
         }
       ],
-      "id": 71,
+      "id": 70,
       "name": "RampSphere_52",
       "parentId": 0
     },
@@ -4680,7 +4641,7 @@
           "useGravity": true
         }
       ],
-      "id": 72,
+      "id": 71,
       "name": "RampSphere_53",
       "parentId": 0
     },
@@ -4751,7 +4712,7 @@
           "useGravity": true
         }
       ],
-      "id": 73,
+      "id": 72,
       "name": "RampSphere_54",
       "parentId": 0
     },
@@ -4822,7 +4783,7 @@
           "useGravity": true
         }
       ],
-      "id": 74,
+      "id": 73,
       "name": "RampSphere_55",
       "parentId": 0
     },
@@ -4893,7 +4854,7 @@
           "useGravity": true
         }
       ],
-      "id": 75,
+      "id": 74,
       "name": "RampSphere_56",
       "parentId": 0
     },
@@ -4964,7 +4925,7 @@
           "useGravity": true
         }
       ],
-      "id": 76,
+      "id": 75,
       "name": "RampSphere_57",
       "parentId": 0
     },
@@ -5035,7 +4996,7 @@
           "useGravity": true
         }
       ],
-      "id": 77,
+      "id": 76,
       "name": "RampSphere_58",
       "parentId": 0
     },
@@ -5106,7 +5067,7 @@
           "useGravity": true
         }
       ],
-      "id": 78,
+      "id": 77,
       "name": "RampSphere_59",
       "parentId": 0
     },
@@ -5177,7 +5138,7 @@
           "useGravity": true
         }
       ],
-      "id": 79,
+      "id": 78,
       "name": "RampSphere_60",
       "parentId": 0
     },
@@ -5248,7 +5209,7 @@
           "useGravity": true
         }
       ],
-      "id": 80,
+      "id": 79,
       "name": "RampSphere_61",
       "parentId": 0
     },
@@ -5319,7 +5280,7 @@
           "useGravity": true
         }
       ],
-      "id": 81,
+      "id": 80,
       "name": "RampSphere_62",
       "parentId": 0
     },
@@ -5390,7 +5351,7 @@
           "useGravity": true
         }
       ],
-      "id": 82,
+      "id": 81,
       "name": "RampSphere_63",
       "parentId": 0
     },
@@ -5429,7 +5390,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 83,
+      "id": 82,
       "name": "GridLight_0",
       "parentId": 0
     },
@@ -5468,7 +5429,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 84,
+      "id": 83,
       "name": "GridLight_1",
       "parentId": 0
     },
@@ -5507,7 +5468,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 85,
+      "id": 84,
       "name": "GridLight_2",
       "parentId": 0
     },
@@ -5546,7 +5507,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 86,
+      "id": 85,
       "name": "GridLight_3",
       "parentId": 0
     },
@@ -5585,7 +5546,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 87,
+      "id": 86,
       "name": "GridLight_4",
       "parentId": 0
     },
@@ -5624,7 +5585,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 88,
+      "id": 87,
       "name": "GridLight_5",
       "parentId": 0
     },
@@ -5663,7 +5624,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 89,
+      "id": 88,
       "name": "GridLight_6",
       "parentId": 0
     },
@@ -5702,7 +5663,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 90,
+      "id": 89,
       "name": "GridLight_7",
       "parentId": 0
     },
@@ -5741,7 +5702,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 91,
+      "id": 90,
       "name": "GridLight_8",
       "parentId": 0
     },
@@ -5780,7 +5741,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 92,
+      "id": 91,
       "name": "GridLight_9",
       "parentId": 0
     },
@@ -5819,7 +5780,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 93,
+      "id": 92,
       "name": "GridLight_10",
       "parentId": 0
     },
@@ -5858,7 +5819,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 94,
+      "id": 93,
       "name": "GridLight_11",
       "parentId": 0
     },
@@ -5897,7 +5858,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 95,
+      "id": 94,
       "name": "GridLight_12",
       "parentId": 0
     },
@@ -5936,7 +5897,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 96,
+      "id": 95,
       "name": "GridLight_13",
       "parentId": 0
     },
@@ -5975,7 +5936,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 97,
+      "id": 96,
       "name": "GridLight_14",
       "parentId": 0
     },
@@ -6014,7 +5975,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 98,
+      "id": 97,
       "name": "GridLight_15",
       "parentId": 0
     },
@@ -6053,7 +6014,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 99,
+      "id": 98,
       "name": "GridLight_16",
       "parentId": 0
     },
@@ -6092,7 +6053,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 100,
+      "id": 99,
       "name": "GridLight_17",
       "parentId": 0
     },
@@ -6131,7 +6092,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 101,
+      "id": 100,
       "name": "GridLight_18",
       "parentId": 0
     },
@@ -6170,7 +6131,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 102,
+      "id": 101,
       "name": "GridLight_19",
       "parentId": 0
     },
@@ -6209,7 +6170,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 103,
+      "id": 102,
       "name": "GridLight_20",
       "parentId": 0
     },
@@ -6248,7 +6209,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 104,
+      "id": 103,
       "name": "GridLight_21",
       "parentId": 0
     },
@@ -6287,7 +6248,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 105,
+      "id": 104,
       "name": "GridLight_22",
       "parentId": 0
     },
@@ -6326,7 +6287,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 106,
+      "id": 105,
       "name": "GridLight_23",
       "parentId": 0
     },
@@ -6365,7 +6326,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 107,
+      "id": 106,
       "name": "GridLight_24",
       "parentId": 0
     },
@@ -6404,7 +6365,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 108,
+      "id": 107,
       "name": "GridLight_25",
       "parentId": 0
     },
@@ -6443,7 +6404,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 109,
+      "id": 108,
       "name": "GridLight_26",
       "parentId": 0
     },
@@ -6482,7 +6443,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 110,
+      "id": 109,
       "name": "GridLight_27",
       "parentId": 0
     },
@@ -6521,7 +6482,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 111,
+      "id": 110,
       "name": "GridLight_28",
       "parentId": 0
     },
@@ -6560,7 +6521,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 112,
+      "id": 111,
       "name": "GridLight_29",
       "parentId": 0
     },
@@ -6599,7 +6560,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 113,
+      "id": 112,
       "name": "GridLight_30",
       "parentId": 0
     },
@@ -6638,7 +6599,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 114,
+      "id": 113,
       "name": "GridLight_31",
       "parentId": 0
     },
@@ -6677,7 +6638,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 115,
+      "id": 114,
       "name": "GridLight_32",
       "parentId": 0
     },
@@ -6716,7 +6677,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 116,
+      "id": 115,
       "name": "GridLight_33",
       "parentId": 0
     },
@@ -6755,7 +6716,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 117,
+      "id": 116,
       "name": "GridLight_34",
       "parentId": 0
     },
@@ -6794,7 +6755,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 118,
+      "id": 117,
       "name": "GridLight_35",
       "parentId": 0
     },
@@ -6833,7 +6794,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 119,
+      "id": 118,
       "name": "GridLight_36",
       "parentId": 0
     },
@@ -6872,7 +6833,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 120,
+      "id": 119,
       "name": "GridLight_37",
       "parentId": 0
     },
@@ -6911,7 +6872,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 121,
+      "id": 120,
       "name": "GridLight_38",
       "parentId": 0
     },
@@ -6950,7 +6911,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 122,
+      "id": 121,
       "name": "GridLight_39",
       "parentId": 0
     },
@@ -6989,7 +6950,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 123,
+      "id": 122,
       "name": "GridLight_40",
       "parentId": 0
     },
@@ -7028,7 +6989,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 124,
+      "id": 123,
       "name": "GridLight_41",
       "parentId": 0
     },
@@ -7067,7 +7028,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 125,
+      "id": 124,
       "name": "GridLight_42",
       "parentId": 0
     },
@@ -7106,7 +7067,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 126,
+      "id": 125,
       "name": "GridLight_43",
       "parentId": 0
     },
@@ -7145,7 +7106,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 127,
+      "id": 126,
       "name": "GridLight_44",
       "parentId": 0
     },
@@ -7184,7 +7145,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 128,
+      "id": 127,
       "name": "GridLight_45",
       "parentId": 0
     },
@@ -7223,7 +7184,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 129,
+      "id": 128,
       "name": "GridLight_46",
       "parentId": 0
     },
@@ -7262,7 +7223,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 130,
+      "id": 129,
       "name": "GridLight_47",
       "parentId": 0
     },
@@ -7301,7 +7262,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 131,
+      "id": 130,
       "name": "GridLight_48",
       "parentId": 0
     },
@@ -7340,7 +7301,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 132,
+      "id": 131,
       "name": "GridLight_49",
       "parentId": 0
     },
@@ -7379,7 +7340,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 133,
+      "id": 132,
       "name": "GridLight_50",
       "parentId": 0
     },
@@ -7418,7 +7379,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 134,
+      "id": 133,
       "name": "GridLight_51",
       "parentId": 0
     },
@@ -7457,7 +7418,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 135,
+      "id": 134,
       "name": "GridLight_52",
       "parentId": 0
     },
@@ -7496,7 +7457,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 136,
+      "id": 135,
       "name": "GridLight_53",
       "parentId": 0
     },
@@ -7535,7 +7496,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 137,
+      "id": 136,
       "name": "GridLight_54",
       "parentId": 0
     },
@@ -7574,7 +7535,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 138,
+      "id": 137,
       "name": "GridLight_55",
       "parentId": 0
     },
@@ -7613,7 +7574,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 139,
+      "id": 138,
       "name": "GridLight_56",
       "parentId": 0
     },
@@ -7652,7 +7613,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 140,
+      "id": 139,
       "name": "GridLight_57",
       "parentId": 0
     },
@@ -7691,7 +7652,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 141,
+      "id": 140,
       "name": "GridLight_58",
       "parentId": 0
     },
@@ -7730,7 +7691,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 142,
+      "id": 141,
       "name": "GridLight_59",
       "parentId": 0
     },
@@ -7769,7 +7730,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 143,
+      "id": 142,
       "name": "GridLight_60",
       "parentId": 0
     },
@@ -7808,7 +7769,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 144,
+      "id": 143,
       "name": "GridLight_61",
       "parentId": 0
     },
@@ -7847,7 +7808,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 145,
+      "id": 144,
       "name": "GridLight_62",
       "parentId": 0
     },
@@ -7886,11 +7847,11 @@
           "type": "LightComponent"
         }
       ],
-      "id": 146,
+      "id": 145,
       "name": "GridLight_63",
       "parentId": 0
     }
   ],
-  "nextId": 147,
+  "nextId": 146,
   "version": 1
 }

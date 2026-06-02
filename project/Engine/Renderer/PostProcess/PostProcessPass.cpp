@@ -81,6 +81,7 @@ bool PostProcessPass::Initialize(GraphicsDevice& gfx, uint32_t width, uint32_t h
     if (!CreateTonemapResources(gfx)) return false;
     if (!CreateTAAResources(gfx))     return false;
     if (!CreateSSRResources(gfx))     return false;
+    if (!CreateFogResources(gfx))     return false;
     return true;
 }
 
@@ -91,6 +92,7 @@ void PostProcessPass::ReleaseResolutionResources() {
     m_taaTex[0].Reset(); m_taaTex[1].Reset();
     m_taaHistoryValid = false;
     m_ssrTex.Reset();
+    m_fogTex.Reset();
 }
 
 void PostProcessPass::Resize(GraphicsDevice& gfx, uint32_t width, uint32_t height) {
@@ -104,6 +106,7 @@ void PostProcessPass::Resize(GraphicsDevice& gfx, uint32_t width, uint32_t heigh
     bool blmOk  = CreateBloomResources(gfx);
     CreateTAAResources(gfx);
     CreateSSRResources(gfx);
+    CreateFogResources(gfx);
     if (!hdrOk || !ssaoOk || !blmOk) {
         char buf[128];
         snprintf(buf, sizeof(buf), "[PostProcess] Resize failed: hdr=%d ssao=%d bloom=%d\n",
@@ -120,11 +123,13 @@ void PostProcessPass::Shutdown() {
         if (m_tonemapCBMapped[i]) { m_tonemapCB[i]->Unmap(0, nullptr); m_tonemapCBMapped[i] = nullptr; }
         if (m_taaCBMapped[i])     { m_taaCB[i]->Unmap(0, nullptr);     m_taaCBMapped[i] = nullptr; }
         if (m_ssrCBMapped[i])     { m_ssrCB[i]->Unmap(0, nullptr);     m_ssrCBMapped[i] = nullptr; }
+        if (m_fogCBMapped[i])     { m_fogCB[i]->Unmap(0, nullptr);     m_fogCBMapped[i] = nullptr; }
         m_ssaoCB[i].Reset();
         m_bloomCB[i].Reset();
         m_tonemapCB[i].Reset();
         m_taaCB[i].Reset();
         m_ssrCB[i].Reset();
+        m_fogCB[i].Reset();
     }
     m_ssaoPSO.Reset();  m_ssaoRS.Reset();
     m_ssaoBlurPSO.Reset(); m_ssaoBlurRS.Reset();
@@ -132,6 +137,7 @@ void PostProcessPass::Shutdown() {
     m_tonemapPSO.Reset(); m_tonemapRS.Reset();
     m_taaPSO.Reset(); m_taaRS.Reset();
     m_ssrPSO.Reset(); m_ssrRS.Reset();
+    m_fogPSO.Reset(); m_fogRS.Reset();
     ReleaseResolutionResources();
     m_hdrRTVHeap.Reset();
 }
@@ -812,6 +818,157 @@ void PostProcessPass::ExecuteSSR(ID3D12GraphicsCommandList* cmd,
     // Restore depth + normal for the rest of the frame / next frame's trackers.
     Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
     Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+}
+
+// ─── Height fog ───────────────────────────────────────────────────────────────
+
+bool PostProcessPass::CreateFogResources(GraphicsDevice& gfx) {
+    ID3D12Device* dev = gfx.GetDevice();
+    static constexpr DXGI_FORMAT FMT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    m_fogTex = CreateDefaultTex2D(dev, FMT, m_width, m_height,
+                                  D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                  D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (!m_fogTex) return false;
+    m_fogState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    if (m_fogSRVSlot == 0) { m_fogUAVSlot = gfx.AllocateSRVSlot(); m_fogSRVSlot = gfx.AllocateSRVSlot(); }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavd = {}; uavd.Format = FMT; uavd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvd = {}; srvd.Format = FMT; srvd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; srvd.Texture2D.MipLevels = 1;
+    dev->CreateUnorderedAccessView(m_fogTex.Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_fogUAVSlot));
+    dev->CreateShaderResourceView (m_fogTex.Get(), &srvd,         gfx.GetSRVCPUHandle(m_fogSRVSlot));
+
+    if (!m_fogRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[4] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 scene HDR
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 depth
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 }; // t2 CSM shadow array
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 output
+        D3D12_ROOT_PARAMETER params[5] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 4; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 5; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_fogRS)))) return false;
+
+        auto fogCS = LoadOrCompileShader(L"Resource/Shaders/VolumetricFog.CS.hlsl", L"cs_6_0");
+        if (!fogCS) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_fogRS.Get();
+        cpd.CS = { fogCS->GetBufferPointer(), fogCS->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_fogPSO)))) return false;
+    }
+    if (!m_fogCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+            m_fogCB[i] = CreateUploadCB(dev, FOG_CB_SIZE, &m_fogCBMapped[i]);
+    }
+    return true;
+}
+
+void PostProcessPass::ExecuteFog(ID3D12GraphicsCommandList* cmd,
+                                 GraphicsDevice& gfx,
+                                 ID3D12Resource* depthResource,
+                                 uint32_t depthSRVSlot,
+                                 const Matrix4x4& invViewProj,
+                                 const Vector3& cameraPos,
+                                 const Vector3& cameraForward,
+                                 const Vector3& sunDir,
+                                 const Vector3& sunColor,
+                                 uint32_t shadowSRVSlot,
+                                 const Matrix4x4* lightViewProj,
+                                 const float* cascadeSplits,
+                                 uint32_t frameIndex,
+                                 uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!FogEnabled || !m_fogTex || !m_fogPSO || !depthResource) return;
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+    uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
+
+    struct FogCB {
+        float invVP[16];
+        float camPos[3];        float _p0;
+        float viewport[4];
+        float rtSize[2];        float _p1[2];
+        float sunDir[3];        float _p2;
+        float sunColor[3];      float _p3;
+        float fogColor[3];      float density;
+        float inscatterColor[3]; float heightFalloff;
+        float fogHeight; float maxOpacity; float inscatterExp; float _p4;
+        float lightViewProj[64];          // 4 × float4x4
+        float cascadeSplits[4];
+        float cameraForward[3]; float _p5;
+        float godRayIntensity; float godRayMaxDist; int godRaySteps; float godRayG;
+    };
+    FogCB cb = {};
+    memcpy(cb.invVP, invViewProj.v, 64);
+    cb.camPos[0] = cameraPos.x; cb.camPos[1] = cameraPos.y; cb.camPos[2] = cameraPos.z;
+    cb.viewport[0] = (float)vpX; cb.viewport[1] = (float)vpY;
+    cb.viewport[2] = (float)vpW; cb.viewport[3] = (float)vpH;
+    cb.rtSize[0] = (float)m_width; cb.rtSize[1] = (float)m_height;
+    cb.sunDir[0] = sunDir.x; cb.sunDir[1] = sunDir.y; cb.sunDir[2] = sunDir.z;
+    cb.sunColor[0] = sunColor.x; cb.sunColor[1] = sunColor.y; cb.sunColor[2] = sunColor.z;
+    cb.fogColor[0] = FogColor[0]; cb.fogColor[1] = FogColor[1]; cb.fogColor[2] = FogColor[2];
+    cb.density = FogDensity;
+    cb.inscatterColor[0] = FogInscatterColor[0]; cb.inscatterColor[1] = FogInscatterColor[1]; cb.inscatterColor[2] = FogInscatterColor[2];
+    cb.heightFalloff = FogHeightFalloff;
+    cb.fogHeight = FogHeight; cb.maxOpacity = FogMaxOpacity; cb.inscatterExp = FogInscatterExp;
+    for (int c = 0; c < 4; ++c) memcpy(cb.lightViewProj + c * 16, lightViewProj[c].v, 64);
+    cb.cascadeSplits[0] = cascadeSplits[0]; cb.cascadeSplits[1] = cascadeSplits[1];
+    cb.cascadeSplits[2] = cascadeSplits[2]; cb.cascadeSplits[3] = cascadeSplits[3];
+    cb.cameraForward[0] = cameraForward.x; cb.cameraForward[1] = cameraForward.y; cb.cameraForward[2] = cameraForward.z;
+    cb.godRayIntensity = GodRayIntensity; cb.godRayMaxDist = GodRayMaxDist;
+    cb.godRaySteps = GodRaySteps; cb.godRayG = GodRayG;
+    memcpy(m_fogCBMapped[fi], &cb, sizeof(cb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, m_fogTex.Get(), m_fogState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_fogState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    // CSM shadow array is already in ALL_SHADER_RESOURCE after the RG lighting read → no barrier.
+    cmd->SetComputeRootSignature(m_fogRS.Get());
+    cmd->SetPipelineState(m_fogPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_fogCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(shadowSRVSlot));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(m_fogUAVSlot));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_fogTex.Get());
+
+    Barrier(cmd, m_fogTex.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    m_fogState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_hdrState = D3D12_RESOURCE_STATE_COPY_DEST;
+    cmd->CopyResource(m_hdrRT.Get(), m_fogTex.Get());
+    Barrier(cmd, m_hdrRT.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 // ─── ExecuteFinal ─────────────────────────────────────────────────────────────

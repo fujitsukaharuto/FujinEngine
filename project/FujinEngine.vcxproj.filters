@@ -126,6 +126,9 @@
     <None Include="Resource\Shaders\SSR.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
+    <None Include="Resource\Shaders\VolumetricFog.CS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
     <None Include="Resource\Shaders\SSAOBlur.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>

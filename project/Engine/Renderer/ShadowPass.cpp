@@ -740,8 +740,10 @@ bool ShadowPass::CreateSpotShadowMap(GraphicsDevice& gfx) {
     clearVal.Format             = DXGI_FORMAT_D32_FLOAT;
     clearVal.DepthStencil.Depth = 1.0f;
 
+    // Created in PIXEL_SHADER_RESOURCE so it is always safe to bind as an SRV even on frames where
+    // no spot shadow pass runs (Count==0 or all slots cached). The RG transitions PSR→DEPTH_WRITE→PSR.
     if (FAILED(device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearVal, IID_PPV_ARGS(&m_spotMap))))
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clearVal, IID_PPV_ARGS(&m_spotMap))))
         return false;
 
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
@@ -799,12 +801,72 @@ bool ShadowPass::CreateSpotConstantBuffers(ID3D12Device* device) {
     return true;
 }
 
+void ShadowPass::BuildCasters(const SceneManager& scene,
+                              GeometryManager& geoMgr,
+                              TextureManager& texMgr,
+                              MaterialManager& matMgr,
+                              std::vector<ShadowCaster>& out) {
+    static const Matrix4x4 s_identityPalette[MAX_BONES] = {};
+    out.clear();
+    out.reserve(64);
+    uint32_t skinCounter = 0;   // every skeletal actor consumes a slot (matches palette upload order)
+    for (auto& actorPtr : scene.GetActors()) {
+        Actor* actor = actorPtr.get();
+        auto* mc = actor->GetComponent<MeshComponent>();
+        if (!mc) continue;
+        auto* t = actor->GetComponent<TransformComponent>();
+        Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
+
+        if (geoMgr.IsSkeletal(mc->MeshPath)) {
+            if (skinCounter >= MAX_SKINNED_OBJECTS) continue;
+            const SkeletalMeshAsset* sm = geoMgr.LoadSkeletalMesh(mc->MeshPath);
+            uint32_t slot = skinCounter++;
+            if (!sm || sm->SubMeshes.empty() || !mc->CastShadow) continue;
+            auto* ac = actor->GetComponent<AnimationComponent>();
+            ShadowCaster c;
+            c.smesh    = sm;
+            c.world    = world;
+            c.kind     = 2;
+            c.skinSlot = slot;
+            c.palette  = (ac && ac->PaletteReady) ? ac->BonePalette.data() : s_identityPalette;
+            c.actorId  = actor->GetId();
+            c.skeletal = true;
+            // No tight bounds for animated meshes; use the root position + a generous radius so the
+            // shadow cache dirty-test can range-cull them (a far runner won't dirty a distant light).
+            c.center   = world.GetTranslation();
+            c.radius   = 2.0f;
+            out.push_back(c);
+            continue;
+        }
+        if (mc->Blend == MeshBlendMode::Translucent) continue;
+        if (!mc->CastShadow) continue;
+        const MeshAsset* mesh = geoMgr.LoadMesh(mc->MeshPath);
+        if (!mesh || mesh->SubMeshes.empty()) continue;
+        ShadowCaster c;
+        c.mesh        = mesh;
+        c.world       = world;
+        c.box         = TransformBoundsToWorld(mesh->BoundsMin, mesh->BoundsMax, world);
+        c.center      = (c.box.lo + c.box.hi) * 0.5f;
+        c.radius      = (c.box.hi - c.box.lo).Length() * 0.5f;
+        c.doubleSided = mc->DoubleSided;
+        c.actorId     = actor->GetId();
+        if (mc->Blend == MeshBlendMode::AlphaClip) {
+            c.kind = 1;
+            const Material* mat = mc->MaterialPath.empty() ? nullptr : matMgr.LoadOrCreate(mc->MaterialPath);
+            const SubMesh& firstSm = mesh->SubMeshes[0];
+            const std::string& albedoPath = (mat && !mat->AlbedoTexturePath.empty())
+                                             ? mat->AlbedoTexturePath : firstSm.DiffusePath;
+            c.albedoSlot = texMgr.LoadTexture(albedoPath);
+        } else {
+            c.kind = 0;
+        }
+        out.push_back(c);
+    }
+}
+
 void ShadowPass::ExecuteSpotGPU(ID3D12GraphicsCommandList* cmd,
-                                const SceneManager& scene,
                                 uint32_t frameIndex,
-                                GeometryManager& geoMgr,
-                                TextureManager& texMgr,
-                                MaterialManager& matMgr,
+                                const std::vector<ShadowCaster>& casters,
                                 GraphicsDevice& gfx,
                                 const SpotShadowData& data) {
     if (data.Count == 0) return;
@@ -817,66 +879,38 @@ void ShadowPass::ExecuteSpotGPU(ID3D12GraphicsCommandList* cmd,
     cmd->RSSetViewports(1, &vp);
     cmd->RSSetScissorRects(1, &scissor);
 
-    // Bone palettes are shared with the cascade pass (per-actor, not per-light); upload here too
-    // so this pass is correct regardless of RG ordering relative to ExecuteGPU.
-    static const Matrix4x4 s_identityPalette[MAX_BONES] = {};
-    {
-        uint32_t palSlot = 0;
-        for (auto& actorPtr : scene.GetActors()) {
-            if (palSlot >= MAX_SKINNED_OBJECTS) break;
-            Actor* actor = actorPtr.get();
-            auto*  mc    = actor->GetComponent<MeshComponent>();
-            if (!mc || !geoMgr.IsSkeletal(mc->MeshPath)) continue;
-            const SkeletalMeshAsset* mesh = geoMgr.LoadSkeletalMesh(mc->MeshPath);
-            if (!mesh || mesh->SubMeshes.empty()) { ++palSlot; continue; }
-            auto*            ac  = actor->GetComponent<AnimationComponent>();
-            const Matrix4x4* pal = (ac && ac->PaletteReady) ? ac->BonePalette.data() : s_identityPalette;
-            memcpy(m_bonePaletteMapped[fi] + palSlot * BONE_PALETTE_STRIDE, pal, BONE_PALETTE_STRIDE);
-            ++palSlot;
-        }
-    }
+    // Upload bone palettes (shared buffer) for skinned casters.
+    for (const ShadowCaster& c : casters)
+        if (c.kind == 2)
+            memcpy(m_bonePaletteMapped[fi] + c.skinSlot * BONE_PALETTE_STRIDE, c.palette, BONE_PALETTE_STRIDE);
 
     for (uint32_t s = 0; s < count; ++s) {
+        if (!data.NeedsRender[s]) continue;   // cached — keep last frame's depth
+
         cmd->OMSetRenderTargets(0, nullptr, FALSE, &m_spotDsvHandles[s]);
         cmd->ClearDepthStencilView(m_spotDsvHandles[s], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
         Plane planes[6];
         ExtractFrustumPlanes(data.ViewProj[s], planes);
 
-        // --- Static (non-alpha-clip) casters ---
+        // --- Static casters ---
         cmd->SetGraphicsRootSignature(m_rootSignature.Get());
         ID3D12PipelineState* curPso = nullptr;
         uint32_t slotIdx = 0;
-        for (auto& actorPtr : scene.GetActors()) {
+        for (const ShadowCaster& c : casters) {
+            if (c.kind != 0) continue;
             if (slotIdx >= MAX_OBJECTS) break;
-            Actor* actor = actorPtr.get();
-            if (!actor->HasComponent<MeshComponent>()) continue;
-            auto* mc = actor->GetComponent<MeshComponent>();
-            if (geoMgr.IsSkeletal(mc->MeshPath)) continue;
-            if (mc->Blend == MeshBlendMode::AlphaClip) continue;
-            if (mc->Blend == MeshBlendMode::Translucent) continue;
-            if (!mc->CastShadow) continue;
-
-            const MeshAsset* mesh = geoMgr.LoadMesh(mc->MeshPath);
-            if (!mesh || mesh->SubMeshes.empty()) continue;
-
-            auto* t = actor->GetComponent<TransformComponent>();
-            Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
-            if (!AabbInFrustum(TransformBoundsToWorld(mesh->BoundsMin, mesh->BoundsMax, world), planes))
-                continue;
-
-            ID3D12PipelineState* pso = m_psoVariants[mc->DoubleSided ? 2 : 0].Get();
+            if (!AabbInFrustum(c.box, planes)) continue;
+            ID3D12PipelineState* pso = m_psoVariants[c.doubleSided ? 2 : 0].Get();
             if (pso != curPso) { cmd->SetPipelineState(pso); curPso = pso; }
-
-            Matrix4x4 lightWVP = data.ViewProj[s] * world;
+            Matrix4x4 lightWVP = data.ViewProj[s] * c.world;
             uint8_t* slot = m_spotCBMapped[fi] + ((UINT64)s * MAX_OBJECTS + slotIdx) * CB_SLOT_SIZE;
             memcpy(slot, lightWVP.v, 64);
             cmd->SetGraphicsRootConstantBufferView(0,
                 m_spotCB[fi]->GetGPUVirtualAddress() + ((UINT64)s * MAX_OBJECTS + slotIdx) * CB_SLOT_SIZE);
-
-            cmd->IASetVertexBuffers(0, 1, &mesh->VBView);
-            cmd->IASetIndexBuffer(&mesh->IBView);
-            for (const SubMesh& sm : mesh->SubMeshes)
+            cmd->IASetVertexBuffers(0, 1, &c.mesh->VBView);
+            cmd->IASetIndexBuffer(&c.mesh->IBView);
+            for (const SubMesh& sm : c.mesh->SubMeshes)
                 cmd->DrawIndexedInstanced(sm.IndexCount, 1, sm.StartIndex, sm.BaseVertex, 0);
             ++slotIdx;
         }
@@ -885,77 +919,42 @@ void ShadowPass::ExecuteSpotGPU(ID3D12GraphicsCommandList* cmd,
         cmd->SetGraphicsRootSignature(m_rootSignatureAlphaClip.Get());
         curPso = nullptr;
         uint32_t acSlotIdx = slotIdx;
-        for (auto& actorPtr : scene.GetActors()) {
+        for (const ShadowCaster& c : casters) {
+            if (c.kind != 1) continue;
             if (acSlotIdx >= MAX_OBJECTS) break;
-            Actor* actor = actorPtr.get();
-            if (!actor->HasComponent<MeshComponent>()) continue;
-            auto* mc = actor->GetComponent<MeshComponent>();
-            if (geoMgr.IsSkeletal(mc->MeshPath)) continue;
-            if (mc->Blend != MeshBlendMode::AlphaClip) continue;
-            if (!mc->CastShadow) continue;
-
-            const MeshAsset* mesh = geoMgr.LoadMesh(mc->MeshPath);
-            if (!mesh || mesh->SubMeshes.empty()) continue;
-
-            auto* t = actor->GetComponent<TransformComponent>();
-            Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
-            if (!AabbInFrustum(TransformBoundsToWorld(mesh->BoundsMin, mesh->BoundsMax, world), planes))
-                continue;
-
-            ID3D12PipelineState* pso = m_psoVariants[mc->DoubleSided ? 3 : 1].Get();
+            if (!AabbInFrustum(c.box, planes)) continue;
+            ID3D12PipelineState* pso = m_psoVariants[c.doubleSided ? 3 : 1].Get();
             if (pso != curPso) { cmd->SetPipelineState(pso); curPso = pso; }
-
-            Matrix4x4 lightWVP = data.ViewProj[s] * world;
+            Matrix4x4 lightWVP = data.ViewProj[s] * c.world;
             uint8_t* slot = m_spotCBMapped[fi] + ((UINT64)s * MAX_OBJECTS + acSlotIdx) * CB_SLOT_SIZE;
             memcpy(slot, lightWVP.v, 64);
             cmd->SetGraphicsRootConstantBufferView(0,
                 m_spotCB[fi]->GetGPUVirtualAddress() + ((UINT64)s * MAX_OBJECTS + acSlotIdx) * CB_SLOT_SIZE);
-
-            const Material* mat = mc->MaterialPath.empty() ? nullptr : matMgr.LoadOrCreate(mc->MaterialPath);
-            const SubMesh& firstSm = mesh->SubMeshes[0];
-            const std::string& albedoPath = (mat && !mat->AlbedoTexturePath.empty())
-                                             ? mat->AlbedoTexturePath : firstSm.DiffusePath;
-            uint32_t albedoSlot = texMgr.LoadTexture(albedoPath);
-            cmd->SetGraphicsRootDescriptorTable(1, gfx.GetSRVGPUHandle(albedoSlot));
-
-            cmd->IASetVertexBuffers(0, 1, &mesh->VBView);
-            cmd->IASetIndexBuffer(&mesh->IBView);
-            for (const SubMesh& sm : mesh->SubMeshes)
+            cmd->SetGraphicsRootDescriptorTable(1, gfx.GetSRVGPUHandle(c.albedoSlot));
+            cmd->IASetVertexBuffers(0, 1, &c.mesh->VBView);
+            cmd->IASetIndexBuffer(&c.mesh->IBView);
+            for (const SubMesh& sm : c.mesh->SubMeshes)
                 cmd->DrawIndexedInstanced(sm.IndexCount, 1, sm.StartIndex, sm.BaseVertex, 0);
             ++acSlotIdx;
         }
 
-        // --- Skinned casters (pose-varying bounds → not frustum-culled) ---
+        // --- Skinned casters (not frustum-culled) ---
         cmd->SetPipelineState(m_skinnedPso.Get());
         cmd->SetGraphicsRootSignature(m_skinnedRootSig.Get());
-        uint32_t skinSlot = 0;
-        for (auto& actorPtr : scene.GetActors()) {
-            if (skinSlot >= MAX_SKINNED_OBJECTS) break;
-            Actor* actor = actorPtr.get();
-            auto*  mc    = actor->GetComponent<MeshComponent>();
-            if (!mc || !geoMgr.IsSkeletal(mc->MeshPath)) continue;
-            const SkeletalMeshAsset* mesh = geoMgr.LoadSkeletalMesh(mc->MeshPath);
-            if (!mesh || mesh->SubMeshes.empty()) { ++skinSlot; continue; }
-            if (!mc->CastShadow) { ++skinSlot; continue; }
-
-            auto* t = actor->GetComponent<TransformComponent>();
-            Matrix4x4 world    = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
-            Matrix4x4 lightWVP = data.ViewProj[s] * world;
-
-            uint8_t* slot = m_spotSkinnedMapped[fi] +
-                ((UINT64)s * MAX_SKINNED_OBJECTS + skinSlot) * CB_SLOT_SIZE;
+        for (const ShadowCaster& c : casters) {
+            if (c.kind != 2) continue;
+            Matrix4x4 lightWVP = data.ViewProj[s] * c.world;
+            uint8_t* slot = m_spotSkinnedMapped[fi] + ((UINT64)s * MAX_SKINNED_OBJECTS + c.skinSlot) * CB_SLOT_SIZE;
             memcpy(slot, lightWVP.v, 64);
             cmd->SetGraphicsRootConstantBufferView(0,
                 m_spotSkinnedCB[fi]->GetGPUVirtualAddress() +
-                ((UINT64)s * MAX_SKINNED_OBJECTS + skinSlot) * CB_SLOT_SIZE);
+                ((UINT64)s * MAX_SKINNED_OBJECTS + c.skinSlot) * CB_SLOT_SIZE);
             cmd->SetGraphicsRootConstantBufferView(1,
-                m_bonePaletteCB[fi]->GetGPUVirtualAddress() + (UINT64)skinSlot * BONE_PALETTE_STRIDE);
-
-            cmd->IASetVertexBuffers(0, 1, &mesh->VBView);
-            cmd->IASetIndexBuffer(&mesh->IBView);
-            for (const SubMesh& sm : mesh->SubMeshes)
+                m_bonePaletteCB[fi]->GetGPUVirtualAddress() + (UINT64)c.skinSlot * BONE_PALETTE_STRIDE);
+            cmd->IASetVertexBuffers(0, 1, &c.smesh->VBView);
+            cmd->IASetIndexBuffer(&c.smesh->IBView);
+            for (const SubMesh& sm : c.smesh->SubMeshes)
                 cmd->DrawIndexedInstanced(sm.IndexCount, 1, sm.StartIndex, sm.BaseVertex, 0);
-            ++skinSlot;
         }
     }
 }
@@ -1051,11 +1050,8 @@ bool ShadowPass::CreatePointConstantBuffers(ID3D12Device* device) {
 }
 
 void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
-                                 const SceneManager& scene,
                                  uint32_t frameIndex,
-                                 GeometryManager& geoMgr,
-                                 TextureManager& texMgr,
-                                 MaterialManager& matMgr,
+                                 const std::vector<ShadowCaster>& casters,
                                  GraphicsDevice& gfx,
                                  const PointShadowData& data) {
     if (data.Count == 0) return;
@@ -1068,82 +1064,10 @@ void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
     cmd->RSSetViewports(1, &vp);
     cmd->RSSetScissorRects(1, &scissor);
 
-    // Shared bone palettes (per-actor), uploaded here so this pass is correct regardless of RG order.
-    static const Matrix4x4 s_identityPalette[MAX_BONES] = {};
-    {
-        uint32_t palSlot = 0;
-        for (auto& actorPtr : scene.GetActors()) {
-            if (palSlot >= MAX_SKINNED_OBJECTS) break;
-            Actor* actor = actorPtr.get();
-            auto*  mc    = actor->GetComponent<MeshComponent>();
-            if (!mc || !geoMgr.IsSkeletal(mc->MeshPath)) continue;
-            const SkeletalMeshAsset* mesh = geoMgr.LoadSkeletalMesh(mc->MeshPath);
-            if (!mesh || mesh->SubMeshes.empty()) { ++palSlot; continue; }
-            auto*            ac  = actor->GetComponent<AnimationComponent>();
-            const Matrix4x4* pal = (ac && ac->PaletteReady) ? ac->BonePalette.data() : s_identityPalette;
-            memcpy(m_bonePaletteMapped[fi] + palSlot * BONE_PALETTE_STRIDE, pal, BONE_PALETTE_STRIDE);
-            ++palSlot;
-        }
-    }
-
-    // Gather the caster list ONCE. Component/asset resolution (GetComponent dynamic_cast, LoadMesh,
-    // LoadTexture) is expensive and was previously redone for all 6 faces of every light. Now each
-    // face only does a frustum test + draw from this cache. Skinned slots match the palette upload
-    // order above (every skeletal actor consumes a slot, capped at MAX_SKINNED_OBJECTS).
-    struct PtCaster {
-        const MeshAsset*         mesh  = nullptr;   // non-skinned
-        const SkeletalMeshAsset* smesh = nullptr;   // skinned
-        Matrix4x4 world;
-        Aabb      box;                              // world AABB (non-skinned only)
-        Vector3   center;                           // box center (non-skinned)
-        float     radius = 0.0f;                    // box bounding radius (non-skinned)
-        int       kind = 0;                         // 0=static, 1=alphaClip, 2=skinned
-        bool      doubleSided = false;
-        uint32_t  albedoSlot  = 0;                  // alphaClip
-        uint32_t  skinSlot    = 0;                  // skinned
-    };
-    std::vector<PtCaster> casters;
-    casters.reserve(64);
-    uint32_t skinCounter = 0;
-    for (auto& actorPtr : scene.GetActors()) {
-        Actor* actor = actorPtr.get();
-        auto* mc = actor->GetComponent<MeshComponent>();
-        if (!mc) continue;
-        auto* t = actor->GetComponent<TransformComponent>();
-        Matrix4x4 world = t ? t->GetWorldMatrix() : Matrix4x4::Identity;
-
-        if (geoMgr.IsSkeletal(mc->MeshPath)) {
-            if (skinCounter >= MAX_SKINNED_OBJECTS) continue;
-            const SkeletalMeshAsset* sm = geoMgr.LoadSkeletalMesh(mc->MeshPath);
-            uint32_t slot = skinCounter++;                 // consume a palette slot regardless
-            if (!sm || sm->SubMeshes.empty() || !mc->CastShadow) continue;
-            PtCaster c; c.smesh = sm; c.world = world; c.kind = 2; c.skinSlot = slot;
-            casters.push_back(c);
-            continue;
-        }
-        if (mc->Blend == MeshBlendMode::Translucent) continue;
-        if (!mc->CastShadow) continue;                     // per-primitive shadow opt-out
-        const MeshAsset* mesh = geoMgr.LoadMesh(mc->MeshPath);
-        if (!mesh || mesh->SubMeshes.empty()) continue;
-        PtCaster c;
-        c.mesh        = mesh;
-        c.world       = world;
-        c.box         = TransformBoundsToWorld(mesh->BoundsMin, mesh->BoundsMax, world);
-        c.center      = (c.box.lo + c.box.hi) * 0.5f;
-        c.radius      = (c.box.hi - c.box.lo).Length() * 0.5f;
-        c.doubleSided = mc->DoubleSided;
-        if (mc->Blend == MeshBlendMode::AlphaClip) {
-            c.kind = 1;
-            const Material* mat = mc->MaterialPath.empty() ? nullptr : matMgr.LoadOrCreate(mc->MaterialPath);
-            const SubMesh& firstSm = mesh->SubMeshes[0];
-            const std::string& albedoPath = (mat && !mat->AlbedoTexturePath.empty())
-                                             ? mat->AlbedoTexturePath : firstSm.DiffusePath;
-            c.albedoSlot = texMgr.LoadTexture(albedoPath);
-        } else {
-            c.kind = 0;
-        }
-        casters.push_back(c);
-    }
+    // Upload bone palettes (shared buffer) for skinned casters.
+    for (const ShadowCaster& c : casters)
+        if (c.kind == 2)
+            memcpy(m_bonePaletteMapped[fi] + c.skinSlot * BONE_PALETTE_STRIDE, c.palette, BONE_PALETTE_STRIDE);
 
     // Conservative angular-size cull: a caster whose bounding sphere subtends less than this ratio
     // of its distance to the light casts a negligible shadow — skip it (UE5 MinScreenRadius idea).
@@ -1151,6 +1075,8 @@ void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
 
     const float nearZ = 0.05f;
     for (uint32_t p = 0; p < count; ++p) {
+        if (!data.NeedsRender[p]) continue;   // cached cube — keep last frame's 6 faces
+
         Vector3   pos  = data.Pos[p];
         float     farZ = (data.Range[p] > nearZ + 0.01f) ? data.Range[p] : (nearZ + 1.0f);
         Matrix4x4 proj = Matrix4x4::Perspective(Math::ToRadians(90.0f), 1.0f, nearZ, farZ);
@@ -1170,7 +1096,7 @@ void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
             cmd->SetGraphicsRootSignature(m_rootSignature.Get());
             ID3D12PipelineState* curPso = nullptr;
             uint32_t slotIdx = 0;
-            for (const PtCaster& c : casters) {
+            for (const ShadowCaster& c : casters) {
                 if (c.kind != 0) continue;
                 if (slotIdx >= MAX_OBJECTS) break;
                 if (c.radius < (c.center - pos).Length() * kMinShadowRatio) continue;
@@ -1193,7 +1119,7 @@ void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
             cmd->SetGraphicsRootSignature(m_rootSignatureAlphaClip.Get());
             curPso = nullptr;
             uint32_t acSlotIdx = slotIdx;
-            for (const PtCaster& c : casters) {
+            for (const ShadowCaster& c : casters) {
                 if (c.kind != 1) continue;
                 if (acSlotIdx >= MAX_OBJECTS) break;
                 if (c.radius < (c.center - pos).Length() * kMinShadowRatio) continue;
@@ -1216,7 +1142,7 @@ void ShadowPass::ExecutePointGPU(ID3D12GraphicsCommandList* cmd,
             // --- Skinned casters (pose-varying bounds → not frustum-culled) ---
             cmd->SetPipelineState(m_skinnedPso.Get());
             cmd->SetGraphicsRootSignature(m_skinnedRootSig.Get());
-            for (const PtCaster& c : casters) {
+            for (const ShadowCaster& c : casters) {
                 if (c.kind != 2) continue;
                 Matrix4x4 lightWVP = viewProj * c.world;
                 uint8_t* slot = m_pointSkinnedMapped[fi] +

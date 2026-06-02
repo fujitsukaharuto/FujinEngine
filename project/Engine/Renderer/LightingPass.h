@@ -36,13 +36,16 @@ public:
                  uint32_t spotShadowSRVSlot = 0,
                  uint32_t pointShadowSRVSlot = 0);
 
-    // CPU: select up to MAX_SHADOW_SPOTS shadow-casting spot lights (nearest to the camera) and
-    // build their view-projections. Call once per frame before recording the spot shadow pass.
-    void PrepareSpotShadows(const SceneManager& scene, const Vector3& cameraPos);
+    // CPU: select up to MAX_SHADOW_SPOTS shadow-casting spot lights (nearest to the camera), assign
+    // stable slots, and compute the per-slot cache dirty flag (NeedsRender) from a signature of the
+    // light transform + in-range casters. `casters` is the shared list from ShadowPass::BuildCasters.
+    void PrepareSpotShadows(const SceneManager& scene, const Vector3& cameraPos,
+                            const std::vector<ShadowCaster>& casters);
     const SpotShadowData& GetSpotData() const { return m_spotData; }
 
-    // CPU: select up to MAX_SHADOW_POINTS shadow-casting point lights (nearest to the camera).
-    void PreparePointShadows(const SceneManager& scene, const Vector3& cameraPos);
+    // CPU: same for point lights (cube shadows).
+    void PreparePointShadows(const SceneManager& scene, const Vector3& cameraPos,
+                             const std::vector<ShadowCaster>& casters);
     const PointShadowData& GetPointData() const { return m_pointData; }
 
     void Shutdown();
@@ -80,8 +83,10 @@ private:
     // Per-frame shadow selection (built by Prepare*Shadows, consumed by Execute).
     SpotShadowData              m_spotData;
     uint64_t                    m_spotActorId[SpotShadowData::MAX] = {};
+    uint64_t                    m_spotSig[SpotShadowData::MAX] = {};      // cache signature per slot
     PointShadowData             m_pointData;
     uint64_t                    m_pointActorId[PointShadowData::MAX] = {};
+    uint64_t                    m_pointSig[PointShadowData::MAX] = {};    // cache signature per slot
 
     bool CreateRootSignature(ID3D12Device* device);
     bool CreatePipelineState(ID3D12Device* device);

@@ -28,6 +28,47 @@ struct LightCullItem {
     bool    directional;
 };
 
+// FNV-1a 64-bit, used to build shadow-cache signatures (light transform + in-range caster worlds).
+static inline void FnvFold(uint64_t& h, const void* p, size_t n) {
+    const uint8_t* b = static_cast<const uint8_t*>(p);
+    for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; }
+}
+// Signature of a light (pos/dir/range/angle/actorId) plus every caster that ACTUALLY affects its
+// shadow map. The affecting set must match the render-time cull exactly, otherwise a caster that is
+// rendered but excluded here can move without invalidating the cache → stale shadow. So we use the
+// same predicate the passes use: spot = AabbInFrustum(spotPlanes); point = overlap with the light's
+// influence box [pos±range] (which is exactly the union of the 6 cube-face frustums). Skeletal
+// casters have no tight bounds, so a center±radius box stands in. dynamicOut is set when any
+// affecting caster is skeletal (animated → must re-render every frame).
+static uint64_t ShadowCacheSig(uint64_t actorId, const Vector3& pos, const Vector3& dir,
+                               float range, float angle,
+                               const std::vector<ShadowCaster>& casters,
+                               const Plane* spotPlanes /* null = point light */,
+                               bool& dynamicOut) {
+    uint64_t h = 1469598103934665603ull;
+    FnvFold(h, &actorId, sizeof(actorId));
+    FnvFold(h, &pos, sizeof(pos)); FnvFold(h, &dir, sizeof(dir));
+    FnvFold(h, &range, sizeof(range)); FnvFold(h, &angle, sizeof(angle));
+    dynamicOut = false;
+
+    Aabb influence(Vector3(pos.x - range, pos.y - range, pos.z - range),
+                   Vector3(pos.x + range, pos.y + range, pos.z + range));   // point: cube coverage
+
+    for (const ShadowCaster& c : casters) {
+        // The caster's world AABB (skeletal meshes carry no tight bounds → center±radius stand-in).
+        Aabb cb = c.skeletal
+                ? Aabb(Vector3(c.center.x - c.radius, c.center.y - c.radius, c.center.z - c.radius),
+                       Vector3(c.center.x + c.radius, c.center.y + c.radius, c.center.z + c.radius))
+                : c.box;
+        bool affects = spotPlanes ? AabbInFrustum(cb, spotPlanes) : cb.Overlaps(influence);
+        if (!affects) continue;
+        FnvFold(h, &c.actorId, sizeof(c.actorId));
+        FnvFold(h, c.world.v, 64);
+        if (c.skeletal) dynamicOut = true;
+    }
+    return h;
+}
+
 static ComPtr<ID3D12Resource> CreateUploadCB(ID3D12Device* device, UINT64 size, uint8_t** mapped) {
     D3D12_HEAP_PROPERTIES hp = {};
     hp.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -327,8 +368,9 @@ void LightingPass::CullLightsToClusters(uint32_t fi, const Matrix4x4& invViewPro
     }
 }
 
-void LightingPass::PrepareSpotShadows(const SceneManager& scene, const Vector3& cameraPos) {
-    struct Cand { uint64_t actorId; Matrix4x4 vp; float dist; };
+void LightingPass::PrepareSpotShadows(const SceneManager& scene, const Vector3& cameraPos,
+                                      const std::vector<ShadowCaster>& casters) {
+    struct Cand { uint64_t actorId; Vector3 pos, dir; float range, angle; float dist; Matrix4x4 vp; };
     std::vector<Cand> cands;
     for (auto& actorPtr : scene.GetActors()) {
         Actor* actor = actorPtr.get();
@@ -341,25 +383,37 @@ void LightingPass::PrepareSpotShadows(const SceneManager& scene, const Vector3& 
         Vector3 dir(rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2]);
         Vector3 d  = w.Position - cameraPos;
         float   dist = d.x * d.x + d.y * d.y + d.z * d.z;
-        cands.push_back({ actor->GetId(),
-                          ShadowPass::ComputeSpotMatrix(w.Position, dir, lc->SpotAngle, lc->Range),
-                          dist });
+        cands.push_back({ actor->GetId(), w.Position, dir, lc->Range, lc->SpotAngle, dist,
+                          ShadowPass::ComputeSpotMatrix(w.Position, dir, lc->SpotAngle, lc->Range) });
     }
-    // Nearest-to-camera first, then keep the budget.
-    std::sort(cands.begin(), cands.end(),
-              [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
-
+    // Keep the nearest MAX, then order that set by actorId so slot assignment is stable across frames
+    // (a stable slot is what makes the shadow cache hit).
+    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
     uint32_t n = (uint32_t)cands.size();
     if (n > SpotShadowData::MAX) n = SpotShadowData::MAX;
+    std::sort(cands.begin(), cands.begin() + n,
+              [](const Cand& a, const Cand& b) { return a.actorId < b.actorId; });
+
     m_spotData.Count = n;
     for (uint32_t i = 0; i < n; ++i) {
-        m_spotData.ViewProj[i] = cands[i].vp;
-        m_spotActorId[i]       = cands[i].actorId;
+        const Cand& c = cands[i];
+        Plane planes[6];
+        ExtractFrustumPlanes(c.vp, planes);   // same cull the spot shadow pass uses
+        bool dyn = false;
+        uint64_t sig = ShadowCacheSig(c.actorId, c.pos, c.dir, c.range, c.angle, casters, planes, dyn);
+        bool dirty = dyn || (sig != m_spotSig[i]);
+        m_spotSig[i]              = sig;
+        m_spotData.ViewProj[i]    = c.vp;
+        m_spotData.NeedsRender[i] = dirty;
+        m_spotActorId[i]          = c.actorId;
     }
-    for (uint32_t i = n; i < SpotShadowData::MAX; ++i) m_spotActorId[i] = 0;
+    for (uint32_t i = n; i < SpotShadowData::MAX; ++i) {
+        m_spotActorId[i] = 0; m_spotData.NeedsRender[i] = false; m_spotSig[i] = 0;
+    }
 }
 
-void LightingPass::PreparePointShadows(const SceneManager& scene, const Vector3& cameraPos) {
+void LightingPass::PreparePointShadows(const SceneManager& scene, const Vector3& cameraPos,
+                                       const std::vector<ShadowCaster>& casters) {
     struct Cand { uint64_t actorId; Vector3 pos; float range; float dist; };
     std::vector<Cand> cands;
     for (auto& actorPtr : scene.GetActors()) {
@@ -373,18 +427,29 @@ void LightingPass::PreparePointShadows(const SceneManager& scene, const Vector3&
         float   dist = d.x * d.x + d.y * d.y + d.z * d.z;
         cands.push_back({ actor->GetId(), wpos, lc->Range, dist });
     }
-    std::sort(cands.begin(), cands.end(),
-              [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
-
+    // Nearest MAX, then stable actorId order for slot caching.
+    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
     uint32_t n = (uint32_t)cands.size();
     if (n > PointShadowData::MAX) n = PointShadowData::MAX;
+    std::sort(cands.begin(), cands.begin() + n,
+              [](const Cand& a, const Cand& b) { return a.actorId < b.actorId; });
+
     m_pointData.Count = n;
+    const Vector3 noDir(0, 0, 0);
     for (uint32_t i = 0; i < n; ++i) {
-        m_pointData.Pos[i]   = cands[i].pos;
-        m_pointData.Range[i] = cands[i].range;
-        m_pointActorId[i]    = cands[i].actorId;
+        const Cand& c = cands[i];
+        bool dyn = false;
+        uint64_t sig = ShadowCacheSig(c.actorId, c.pos, noDir, c.range, 0.0f, casters, nullptr, dyn);
+        bool dirty = dyn || (sig != m_pointSig[i]);
+        m_pointSig[i]              = sig;
+        m_pointData.Pos[i]         = c.pos;
+        m_pointData.Range[i]       = c.range;
+        m_pointData.NeedsRender[i] = dirty;
+        m_pointActorId[i]          = c.actorId;
     }
-    for (uint32_t i = n; i < PointShadowData::MAX; ++i) m_pointActorId[i] = 0;
+    for (uint32_t i = n; i < PointShadowData::MAX; ++i) {
+        m_pointActorId[i] = 0; m_pointData.NeedsRender[i] = false; m_pointSig[i] = 0;
+    }
 }
 
 void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,

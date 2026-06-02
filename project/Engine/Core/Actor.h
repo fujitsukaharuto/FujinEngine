@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstdint>
 #include <type_traits>
+#include <typeinfo>
 #include <algorithm>
 #include "Component.h"
 
@@ -31,8 +32,12 @@ public:
 
     template<typename T>
     T* GetComponent() const {
+        // All components derive directly from Component (no intermediate bases), so an exact
+        // dynamic-type match is equivalent to dynamic_cast<T*> but avoids its hierarchy walk —
+        // a meaningful win since this runs many times per actor per frame (esp. in Debug).
+        const std::type_info& want = typeid(T);
         for (auto& c : m_components)
-            if (auto* p = dynamic_cast<T*>(c.get())) return p;
+            if (typeid(*c) == want) return static_cast<T*>(c.get());
         return nullptr;
     }
 
@@ -41,8 +46,9 @@ public:
 
     template<typename T>
     void RemoveComponent() {
+        const std::type_info& want = typeid(T);
         auto it = std::find_if(m_components.begin(), m_components.end(),
-            [](const std::unique_ptr<Component>& c) { return dynamic_cast<T*>(c.get()) != nullptr; });
+            [&want](const std::unique_ptr<Component>& c) { return typeid(*c) == want; });
         if (it != m_components.end())
             RemoveComponent(it->get());
     }

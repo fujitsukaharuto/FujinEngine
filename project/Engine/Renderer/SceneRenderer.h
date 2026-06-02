@@ -81,6 +81,8 @@ private:
     std::unordered_map<uint64_t, int> m_renderProxies;   // actor id → proxy
     std::unordered_set<uint64_t>      m_visible;          // ids passing the camera frustum
 
+    std::vector<ShadowCaster>         m_shadowCasters;    // gathered once per frame, shared by shadow passes
+
     void BuildVisibleSet(const SceneManager& scene, const Matrix4x4& viewProj);
 
     void UpdateAnimations(const SceneManager& scene, float dt);
