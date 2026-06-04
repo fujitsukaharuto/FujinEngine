@@ -3,6 +3,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <cstdint>
+#include "GpuProfiler.h"
 
 namespace Fujin {
 
@@ -42,6 +43,13 @@ public:
     uint32_t                    AllocateSRVSlot();
     D3D12_CPU_DESCRIPTOR_HANDLE GetSRVCPUHandle(uint32_t slot) const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUHandle(uint32_t slot) const;
+
+    GpuProfiler&                GetProfiler()          { return m_profiler; }
+
+    // VSync toggle: when off, present with no sync interval (tearing allowed if the
+    // swap chain supports it) so the frame rate is uncapped for measurement.
+    void                        SetVSync(bool v)       { m_vsync = v; }
+    bool                        GetVSync()       const { return m_vsync; }
 
 private:
     void CreateDevice();
@@ -86,6 +94,10 @@ private:
     HWND     m_hwnd   = nullptr;
     uint32_t m_width  = 0;
     uint32_t m_height = 0;
+
+    GpuProfiler m_profiler;
+    bool        m_vsync            = true;  // present sync interval 1 vs 0
+    bool        m_tearingSupported = false; // DXGI allow-tearing capability
 };
 
 } // namespace Fujin

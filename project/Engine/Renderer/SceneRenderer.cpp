@@ -88,6 +88,7 @@ bool SceneRenderer::Initialize(GraphicsDevice& gfx) {
     if (!m_particlePass.Initialize(gfx))             return false;
     if (!m_translucencyPass.Initialize(gfx))         return false;
     if (!m_postProcess.Initialize(gfx, w, h))        return false;
+    if (!m_ddgi.Initialize(gfx))                     return false;
 
     return true;
 }
@@ -110,6 +111,8 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                             uint32_t frameIndex,
                             uint32_t vpX, uint32_t vpY,
                             uint32_t vpW, uint32_t vpH) {
+    auto& prof = gfx.GetProfiler();
+
     // ---- Delta time for animation ----
     auto now = std::chrono::steady_clock::now();
     float dt = 0.0f;
@@ -205,6 +208,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     for (uint32_t s = 0; s < pointData.Count; ++s) anyPointDirty |= pointData.NeedsRender[s];
 
     // --- SSAO (one-frame lag): runs before RG using previous frame's GBuffer/depth ---
+    prof.BeginScope(cmd, "SSAO");
     // Transition GBuffer RT1 and depth to compute-shader SRV state
     {
         D3D12_RESOURCE_BARRIER barriers[2] = {};
@@ -237,6 +241,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
         barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmd->ResourceBarrier(2, barriers);
     }
+    prof.EndScope(cmd);
 
     // --- Build render graph ---
     m_rg.BeginFrame();
@@ -337,7 +342,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
         });
 
     m_rg.Compile();
-    m_rg.Execute(cmd);
+    m_rg.Execute(cmd, &prof);
 
     // RG's LightingPass leaves GBuffer RTs in ALL_SHADER_RESOURCE (0xC0 = PSR|NON_PIXEL).
     // The next frame's SSAO pre-transition hardcodes StateBefore = PSR (0x80).
@@ -349,6 +354,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
     m_rg.TransitionResource(cmd, hDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
     // Translucency pass: forward PBR, sorted back-to-front, renders into HDR RT
+    prof.BeginScope(cmd, "Translucency");
     {
         D3D12_CPU_DESCRIPTOR_HANDLE hdrRtv = m_postProcess.GetHDRRTV();
         m_translucencyPass.Execute(cmd, gfx, scene, frameIndex,
@@ -362,46 +368,91 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                    hdrRtv,
                                    evpX, evpY, evpW, evpH);
     }
+    prof.EndScope(cmd);
 
     // Particle pass: forward alpha-blended, renders into HDR RT
+    prof.BeginScope(cmd, "Particles");
     {
         D3D12_CPU_DESCRIPTOR_HANDLE hdrRtv = m_postProcess.GetHDRRTV();
         D3D12_CPU_DESCRIPTOR_HANDLE dsv    = gfx.GetCurrentDSV();
         cmd->OMSetRenderTargets(1, &hdrRtv, FALSE, &dsv);
 
         Matrix4x4 particleView = Matrix4x4::LookAt(CameraPos, CameraTarget, Vector3(0, 1, 0));
-        m_particlePass.Execute(cmd, gfx, scene, viewProj, particleView,
-                               evpX, evpY, evpW, evpH, frameIndex, m_totalTime, dt);
+        m_particlePass.Execute(cmd, gfx, scene, m_texMgr, m_geoMgr, viewProj, particleView,
+                               evpX, evpY, evpW, evpH, frameIndex, m_totalTime, dt,
+                               m_gbuffer.GetResource(1), m_gbuffer.GetSRVSlot(1));
     }
+    prof.EndScope(cmd);
 
     // Height fog (no-op unless enabled): exponential height fog + sun inscatter + optional volumetric
     // god rays (directional CSM ray-march). Composited into the HDR RT.
+    prof.BeginScope(cmd, "Fog");
     m_postProcess.ExecuteFog(cmd, gfx,
                              gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
                              invViewProj, CameraPos, cameraForward, lightDir, sunColor,
                              m_shadowPass.GetSRVSlot(), shadowData.LightViewProj, shadowData.CascadeSplits,
                              frameIndex, evpX, evpY, evpW, evpH);
+    prof.EndScope(cmd);
+
+    // DDGI (no-op unless enabled): off-screen one-bounce indirect diffuse from the probe volume.
+    // Complements SSGI (on-screen near-field). Additively composited into the HDR RT.
+    prof.BeginScope(cmd, "DDGI");
+    {
+        const float gOrigin[3]  = { m_ddgi.Origin.x, m_ddgi.Origin.y, m_ddgi.Origin.z };
+        const float gSpacing[3] = { m_ddgi.Spacing.x, m_ddgi.Spacing.y, m_ddgi.Spacing.z };
+        // Capture: inject the lit scene into the probes + resolve (reads HDR before GI add = 1 bounce).
+        m_postProcess.ExecuteDdgiCapture(cmd, gfx,
+                                         gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                                         invViewProj, m_ddgi,
+                                         gOrigin, gSpacing, m_ddgi.Dims,
+                                         frameIndex, evpX, evpY, evpW, evpH);
+        // Apply: sample the probe volume and add indirect diffuse to the HDR.
+        m_postProcess.ExecuteDdgi(cmd, gfx, m_gbuffer,
+                                  gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                                  invViewProj, m_ddgi.GetSRVSlot(),
+                                  gOrigin, gSpacing, m_ddgi.Dims,
+                                  frameIndex, evpX, evpY, evpW, evpH);
+    }
+    prof.EndScope(cmd);
+
+    // SSGI (no-op unless enabled): one-bounce indirect diffuse, temporally accumulated + bilateral
+    // denoised, composited into the HDR RT. Runs after lighting/fog (reads the lit HDR) and before SSR.
+    // Reprojects GI history with the motion-vector RT (same convention as TAA).
+    prof.BeginScope(cmd, "SSGI");
+    m_postProcess.ExecuteSSGI(cmd, gfx, m_gbuffer,
+                              gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
+                              m_gbuffer.GetResource(3), m_gbuffer.GetSRVSlot(3),
+                              viewProj, invViewProj, m_prevViewProjJittered, CameraPos,
+                              jitterUVx - m_prevJitterUVx, jitterUVy - m_prevJitterUVy,
+                              frameIndex, evpX, evpY, evpW, evpH);
+    prof.EndScope(cmd);
 
     // SSR (no-op unless enabled): composites screen-space reflections into the HDR RT.
+    prof.BeginScope(cmd, "SSR");
     m_postProcess.ExecuteSSR(cmd, gfx, m_gbuffer,
                              gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
                              viewProj, invViewProj, CameraPos,
                              frameIndex, evpX, evpY, evpW, evpH);
+    prof.EndScope(cmd);
 
     // TAA resolve (no-op unless enabled): reprojects history into the HDR RT before tonemap.
+    prof.BeginScope(cmd, "TAA");
     m_postProcess.ExecuteTAA(cmd, gfx, frameIndex,
                              gfx.GetDepthBuffer(), gfx.GetDepthSRVSlot(),
                              m_gbuffer.GetResource(3), m_gbuffer.GetSRVSlot(3),
                              invViewProj, m_prevViewProjJittered,
                              jitterUVx - m_prevJitterUVx, jitterUVy - m_prevJitterUVy,
                              evpX, evpY, evpW, evpH);
+    prof.EndScope(cmd);
     m_prevViewProjJittered = viewProj;
     m_prevJitterUVx = jitterUVx;
     m_prevJitterUVy = jitterUVy;
     ++m_frameCounter;
 
     // Post-process: bloom + tonemap + FXAA → back buffer
+    prof.BeginScope(cmd, "PostFinal");
     m_postProcess.ExecuteFinal(cmd, gfx, frameIndex, evpX, evpY, evpW, evpH);
+    prof.EndScope(cmd);
 
     // Restore depth/RTV for the ImGui pass that follows
     D3D12_CPU_DESCRIPTOR_HANDLE mainRtv = gfx.GetCurrentRTV();

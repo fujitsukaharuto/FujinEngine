@@ -1,5 +1,6 @@
 #include "PostProcessPass.h"
 #include "Engine/Graphics/DxcHelper.h"
+#include "Engine/Renderer/GI/DdgiVolume.h"
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
@@ -81,6 +82,8 @@ bool PostProcessPass::Initialize(GraphicsDevice& gfx, uint32_t width, uint32_t h
     if (!CreateTonemapResources(gfx)) return false;
     if (!CreateTAAResources(gfx))     return false;
     if (!CreateSSRResources(gfx))     return false;
+    if (!CreateSSGIResources(gfx))    return false;
+    if (!CreateDdgiResources(gfx))    return false;
     if (!CreateFogResources(gfx))     return false;
     return true;
 }
@@ -92,6 +95,10 @@ void PostProcessPass::ReleaseResolutionResources() {
     m_taaTex[0].Reset(); m_taaTex[1].Reset();
     m_taaHistoryValid = false;
     m_ssrTex.Reset();
+    m_ssgiTex.Reset();
+    m_ssgiHist[0].Reset(); m_ssgiHist[1].Reset();
+    m_ssgiHistValid = false;
+    m_ddgiTex.Reset();
     m_fogTex.Reset();
 }
 
@@ -106,6 +113,8 @@ void PostProcessPass::Resize(GraphicsDevice& gfx, uint32_t width, uint32_t heigh
     bool blmOk  = CreateBloomResources(gfx);
     CreateTAAResources(gfx);
     CreateSSRResources(gfx);
+    CreateSSGIResources(gfx);
+    CreateDdgiResources(gfx);
     CreateFogResources(gfx);
     if (!hdrOk || !ssaoOk || !blmOk) {
         char buf[128];
@@ -123,12 +132,24 @@ void PostProcessPass::Shutdown() {
         if (m_tonemapCBMapped[i]) { m_tonemapCB[i]->Unmap(0, nullptr); m_tonemapCBMapped[i] = nullptr; }
         if (m_taaCBMapped[i])     { m_taaCB[i]->Unmap(0, nullptr);     m_taaCBMapped[i] = nullptr; }
         if (m_ssrCBMapped[i])     { m_ssrCB[i]->Unmap(0, nullptr);     m_ssrCBMapped[i] = nullptr; }
+        if (m_ssgiCBMapped[i])    { m_ssgiCB[i]->Unmap(0, nullptr);    m_ssgiCBMapped[i] = nullptr; }
+        if (m_ssgiTemporalCBMapped[i])  { m_ssgiTemporalCB[i]->Unmap(0, nullptr);  m_ssgiTemporalCBMapped[i] = nullptr; }
+        if (m_ssgiCompositeCBMapped[i]) { m_ssgiCompositeCB[i]->Unmap(0, nullptr); m_ssgiCompositeCBMapped[i] = nullptr; }
+        if (m_ddgiCBMapped[i])    { m_ddgiCB[i]->Unmap(0, nullptr);    m_ddgiCBMapped[i] = nullptr; }
+        if (m_ddgiInjectCBMapped[i])  { m_ddgiInjectCB[i]->Unmap(0, nullptr);  m_ddgiInjectCBMapped[i] = nullptr; }
+        if (m_ddgiResolveCBMapped[i]) { m_ddgiResolveCB[i]->Unmap(0, nullptr); m_ddgiResolveCBMapped[i] = nullptr; }
         if (m_fogCBMapped[i])     { m_fogCB[i]->Unmap(0, nullptr);     m_fogCBMapped[i] = nullptr; }
         m_ssaoCB[i].Reset();
         m_bloomCB[i].Reset();
         m_tonemapCB[i].Reset();
         m_taaCB[i].Reset();
         m_ssrCB[i].Reset();
+        m_ssgiCB[i].Reset();
+        m_ssgiTemporalCB[i].Reset();
+        m_ssgiCompositeCB[i].Reset();
+        m_ddgiCB[i].Reset();
+        m_ddgiInjectCB[i].Reset();
+        m_ddgiResolveCB[i].Reset();
         m_fogCB[i].Reset();
     }
     m_ssaoPSO.Reset();  m_ssaoRS.Reset();
@@ -137,6 +158,12 @@ void PostProcessPass::Shutdown() {
     m_tonemapPSO.Reset(); m_tonemapRS.Reset();
     m_taaPSO.Reset(); m_taaRS.Reset();
     m_ssrPSO.Reset(); m_ssrRS.Reset();
+    m_ssgiPSO.Reset(); m_ssgiRS.Reset();
+    m_ssgiTemporalPSO.Reset(); m_ssgiTemporalRS.Reset();
+    m_ssgiCompositePSO.Reset(); m_ssgiCompositeRS.Reset();
+    m_ddgiPSO.Reset(); m_ddgiRS.Reset();
+    m_ddgiInjectPSO.Reset(); m_ddgiInjectRS.Reset();
+    m_ddgiResolvePSO.Reset(); m_ddgiResolveRS.Reset();
     m_fogPSO.Reset(); m_fogRS.Reset();
     ReleaseResolutionResources();
     m_hdrRTVHeap.Reset();
@@ -818,6 +845,582 @@ void PostProcessPass::ExecuteSSR(ID3D12GraphicsCommandList* cmd,
     // Restore depth + normal for the rest of the frame / next frame's trackers.
     Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
     Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+}
+
+// ─── SSGI ─────────────────────────────────────────────────────────────────────
+
+bool PostProcessPass::CreateSSGIResources(GraphicsDevice& gfx) {
+    ID3D12Device* dev = gfx.GetDevice();
+    static constexpr DXGI_FORMAT FMT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    m_ssgiTex = CreateDefaultTex2D(dev, FMT, m_width, m_height,
+                                   D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (!m_ssgiTex) return false;
+    m_ssgiState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    if (m_ssgiSRVSlot == 0) { m_ssgiUAVSlot = gfx.AllocateSRVSlot(); m_ssgiSRVSlot = gfx.AllocateSRVSlot(); }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavd = {}; uavd.Format = FMT; uavd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvd = {}; srvd.Format = FMT; srvd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; srvd.Texture2D.MipLevels = 1;
+    dev->CreateUnorderedAccessView(m_ssgiTex.Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_ssgiUAVSlot));
+    dev->CreateShaderResourceView (m_ssgiTex.Get(), &srvd,         gfx.GetSRVCPUHandle(m_ssgiSRVSlot));
+
+    if (!m_ssgiRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[5] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 scene HDR
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 depth
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 }; // t2 normal
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, 0 }; // t3 albedo
+        ranges[4] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 output
+        D3D12_ROOT_PARAMETER params[6] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 5; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 6; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_ssgiRS)))) return false;
+
+        auto ssgiCS = LoadOrCompileShader(L"Resource/Shaders/SSGI.CS.hlsl", L"cs_6_0");
+        if (!ssgiCS) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_ssgiRS.Get();
+        cpd.CS = { ssgiCS->GetBufferPointer(), ssgiCS->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_ssgiPSO)))) return false;
+    }
+    if (!m_ssgiCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+            m_ssgiCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ssgiCBMapped[i]);
+    }
+
+    // Accumulated GI history (ping-pong). Created in NON_PIXEL_SHADER_RESOURCE so the first frame's
+    // history read is a valid state even before anything writes it (HistoryValid guards the contents).
+    for (uint32_t k = 0; k < 2; ++k) {
+        m_ssgiHist[k] = CreateDefaultTex2D(dev, FMT, m_width, m_height,
+                                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if (!m_ssgiHist[k]) return false;
+        m_ssgiHistState[k] = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        if (m_ssgiHistSRVSlot[k] == 0) { m_ssgiHistUAVSlot[k] = gfx.AllocateSRVSlot(); m_ssgiHistSRVSlot[k] = gfx.AllocateSRVSlot(); }
+        dev->CreateUnorderedAccessView(m_ssgiHist[k].Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_ssgiHistUAVSlot[k]));
+        dev->CreateShaderResourceView (m_ssgiHist[k].Get(), &srvd,         gfx.GetSRVCPUHandle(m_ssgiHistSRVSlot[k]));
+    }
+    m_ssgiHistValid = false;
+
+    // Temporal + composite share the same 6-parameter layout as the trace pass (CBV b0, 4 SRV tables,
+    // 1 UAV table) with a linear (s0) and point (s1) static sampler.
+    auto buildSsgiPipeline = [&](const wchar_t* shaderPath, ComPtr<ID3D12RootSignature>& rs,
+                                 ComPtr<ID3D12PipelineState>& pso) -> bool {
+        if (rs) return true;
+        D3D12_DESCRIPTOR_RANGE ranges[5] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 };
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 };
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 };
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, 0 };
+        ranges[4] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 };
+        D3D12_ROOT_PARAMETER params[6] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 5; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 6; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&rs)))) return false;
+        auto cs = LoadOrCompileShader(shaderPath, L"cs_6_0");
+        if (!cs) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = rs.Get();
+        cpd.CS = { cs->GetBufferPointer(), cs->GetBufferSize() };
+        return SUCCEEDED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&pso)));
+    };
+    if (!buildSsgiPipeline(L"Resource/Shaders/SSGITemporal.CS.hlsl",  m_ssgiTemporalRS,  m_ssgiTemporalPSO))  return false;
+    if (!buildSsgiPipeline(L"Resource/Shaders/SSGIComposite.CS.hlsl", m_ssgiCompositeRS, m_ssgiCompositePSO)) return false;
+    if (!m_ssgiTemporalCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i) {
+            m_ssgiTemporalCB[i]  = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ssgiTemporalCBMapped[i]);
+            m_ssgiCompositeCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ssgiCompositeCBMapped[i]);
+        }
+    }
+    return true;
+}
+
+void PostProcessPass::ExecuteSSGI(ID3D12GraphicsCommandList* cmd,
+                                  GraphicsDevice& gfx,
+                                  const GBuffer& gbuffer,
+                                  ID3D12Resource* depthResource,
+                                  uint32_t depthSRVSlot,
+                                  ID3D12Resource* velocityResource,
+                                  uint32_t velocitySRVSlot,
+                                  const Matrix4x4& viewProj,
+                                  const Matrix4x4& invViewProj,
+                                  const Matrix4x4& viewProjPrev,
+                                  const Vector3& cameraPos,
+                                  float jitterDeltaU, float jitterDeltaV,
+                                  uint32_t frameIndex,
+                                  uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!SsgiEnabled || !m_ssgiTex || !m_ssgiPSO || !m_ssgiTemporalPSO || !m_ssgiCompositePSO ||
+        !depthResource || !velocityResource) return;
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
+    uint32_t fi   = frameIndex % NUM_FRAMES_IN_FLIGHT;
+    uint32_t cur  = m_ssgiHistWrite;          // history slot written this frame
+    uint32_t prev = 1 - cur;                  // history slot read (last frame's accumulation)
+    const float vpf[4] = { (float)vpX, (float)vpY, (float)vpW, (float)vpH };
+
+    // ── CBs ─────────────────────────────────────────────────────────────
+    struct SSGICB {
+        float invVP[16]; float vp[16];
+        float camPos[3]; float _p0;
+        float viewport[4];
+        float rtW, rtH, radius, thickness;
+        int   rayCount, stepCount; float intensity, frameJitter;
+    };
+    SSGICB cb = {};
+    memcpy(cb.invVP, invViewProj.v, 64);
+    memcpy(cb.vp,    viewProj.v,    64);
+    cb.camPos[0] = cameraPos.x; cb.camPos[1] = cameraPos.y; cb.camPos[2] = cameraPos.z;
+    memcpy(cb.viewport, vpf, sizeof(vpf));
+    cb.rtW = (float)m_width; cb.rtH = (float)m_height;
+    cb.radius = SsgiRadius; cb.thickness = SsgiThickness;
+    cb.rayCount = SsgiRayCount; cb.stepCount = SsgiStepCount;
+    cb.intensity = SsgiIntensity;
+    cb.frameJitter = (float)(frameIndex & 1023) * 0.6180339887f; // golden-ratio rotation per frame
+    memcpy(m_ssgiCBMapped[fi], &cb, sizeof(cb));
+
+    struct SSGITemporalCB {
+        float invVPCur[16]; float vpPrev[16];
+        float viewport[4];
+        float rtW, rtH, historyBlend, historyValid;
+        float jitterDU, jitterDV; float _pad[2];
+    };
+    SSGITemporalCB tcb = {};
+    memcpy(tcb.invVPCur, invViewProj.v, 64);
+    memcpy(tcb.vpPrev,   viewProjPrev.v, 64);
+    memcpy(tcb.viewport, vpf, sizeof(vpf));
+    tcb.rtW = (float)m_width; tcb.rtH = (float)m_height;
+    tcb.historyBlend = SsgiDenoise ? SsgiHistoryBlend : 0.0f;
+    tcb.historyValid = m_ssgiHistValid ? 1.0f : 0.0f;
+    tcb.jitterDU = jitterDeltaU; tcb.jitterDV = jitterDeltaV;
+    memcpy(m_ssgiTemporalCBMapped[fi], &tcb, sizeof(tcb));
+
+    struct SSGICompositeCB {
+        float viewport[4];
+        float rtW, rtH, intensity; int blurRadius;
+        float depthSigma; float _pad[3];
+    };
+    SSGICompositeCB ccb = {};
+    memcpy(ccb.viewport, vpf, sizeof(vpf));
+    ccb.rtW = (float)m_width; ccb.rtH = (float)m_height;
+    ccb.intensity  = SsgiIntensity;
+    ccb.blurRadius = SsgiDenoise ? SsgiBlurRadius : 0;
+    ccb.depthSigma = SsgiDepthSigma;
+    memcpy(m_ssgiCompositeCBMapped[fi], &ccb, sizeof(ccb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    ID3D12Resource* normalRes = gbuffer.GetResource(1);
+    ID3D12Resource* albedoRes = gbuffer.GetResource(0);
+
+    // Transition the read-only inputs once for the whole pass.
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, albedoRes, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, velocityResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+    // ── Pass 1: trace raw GI → m_ssgiTex ────────────────────────────────
+    Barrier(cmd, m_ssgiTex.Get(), m_ssgiState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_ssgiState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    cmd->SetComputeRootSignature(m_ssgiRS.Get());
+    cmd->SetPipelineState(m_ssgiPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ssgiCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(1)));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(0)));
+    cmd->SetComputeRootDescriptorTable(5, gfx.GetSRVGPUHandle(m_ssgiUAVSlot));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_ssgiTex.Get());
+
+    // ── Pass 2: temporal accumulate (cur GI + reprojected history → hist[cur]) ──
+    Barrier(cmd, m_ssgiTex.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_ssgiState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, m_ssgiHist[prev].Get(), m_ssgiHistState[prev], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_ssgiHistState[prev] = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, m_ssgiHist[cur].Get(), m_ssgiHistState[cur], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_ssgiHistState[cur] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    cmd->SetComputeRootSignature(m_ssgiTemporalRS.Get());
+    cmd->SetPipelineState(m_ssgiTemporalPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ssgiTemporalCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_ssgiSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(m_ssgiHistSRVSlot[prev]));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(velocitySRVSlot));
+    cmd->SetComputeRootDescriptorTable(5, gfx.GetSRVGPUHandle(m_ssgiHistUAVSlot[cur]));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_ssgiHist[cur].Get());
+
+    // ── Pass 3: composite (bilateral denoise hist[cur] + add to scene → m_ssgiTex) ──
+    Barrier(cmd, m_ssgiHist[cur].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_ssgiHistState[cur] = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, m_ssgiTex.Get(), m_ssgiState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_ssgiState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    cmd->SetComputeRootSignature(m_ssgiCompositeRS.Get());
+    cmd->SetPipelineState(m_ssgiCompositePSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ssgiCompositeCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(m_ssgiHistSRVSlot[cur]));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(1)));
+    cmd->SetComputeRootDescriptorTable(5, gfx.GetSRVGPUHandle(m_ssgiUAVSlot));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_ssgiTex.Get());
+
+    // Copy the composited scene+GI back into the HDR RT so the rest of the chain is unchanged.
+    Barrier(cmd, m_ssgiTex.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    m_ssgiState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_hdrState = D3D12_RESOURCE_STATE_COPY_DEST;
+    cmd->CopyResource(m_hdrRT.Get(), m_ssgiTex.Get());
+    Barrier(cmd, m_hdrRT.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    // Restore depth + GBuffer normal/albedo/velocity for the rest of the frame / next frame's trackers.
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, albedoRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, velocityResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    m_ssgiHistWrite = prev;   // next frame writes the buffer we just read as history
+    m_ssgiHistValid = true;
+}
+
+// ─── DDGI apply ─────────────────────────────────────────────────────────────
+
+bool PostProcessPass::CreateDdgiResources(GraphicsDevice& gfx) {
+    ID3D12Device* dev = gfx.GetDevice();
+    static constexpr DXGI_FORMAT FMT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    m_ddgiTex = CreateDefaultTex2D(dev, FMT, m_width, m_height,
+                                   D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (!m_ddgiTex) return false;
+    m_ddgiState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    if (m_ddgiSRVSlot == 0) { m_ddgiUAVSlot = gfx.AllocateSRVSlot(); m_ddgiSRVSlot = gfx.AllocateSRVSlot(); }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavd = {}; uavd.Format = FMT; uavd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvd = {}; srvd.Format = FMT; srvd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; srvd.Texture2D.MipLevels = 1;
+    dev->CreateUnorderedAccessView(m_ddgiTex.Get(), nullptr, &uavd, gfx.GetSRVCPUHandle(m_ddgiUAVSlot));
+    dev->CreateShaderResourceView (m_ddgiTex.Get(), &srvd,         gfx.GetSRVCPUHandle(m_ddgiSRVSlot));
+
+    if (!m_ddgiRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[6] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 scene HDR
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 depth
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, 0 }; // t2 normal
+        ranges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, 0 }; // t3 albedo
+        ranges[4] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4, 0, 0 }; // t4 probe StructuredBuffer
+        ranges[5] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 output
+        D3D12_ROOT_PARAMETER params[7] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 6; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samps[2] = {};
+        samps[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samps[0].AddressU = samps[0].AddressV = samps[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[0].MaxLOD = D3D12_FLOAT32_MAX; samps[0].ShaderRegister = 0;
+        samps[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        samps[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samps[1].AddressU = samps[1].AddressV = samps[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samps[1].MaxLOD = D3D12_FLOAT32_MAX; samps[1].ShaderRegister = 1;
+        samps[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 7; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 2; rsd.pStaticSamplers = samps;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_ddgiRS)))) return false;
+
+        auto ddgiCS = LoadOrCompileShader(L"Resource/Shaders/DdgiApply.CS.hlsl", L"cs_6_0");
+        if (!ddgiCS) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_ddgiRS.Get();
+        cpd.CS = { ddgiCS->GetBufferPointer(), ddgiCS->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_ddgiPSO)))) return false;
+    }
+    if (!m_ddgiCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+            m_ddgiCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ddgiCBMapped[i]);
+    }
+
+    // ── Capture pipelines: inject (screen → accumulator) and resolve (accumulator → probe SH) ──
+    if (!m_ddgiInjectRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[3] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0 scene HDR
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1 depth
+        ranges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 accumulator
+        D3D12_ROOT_PARAMETER params[4] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 3; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_STATIC_SAMPLER_DESC samp = {};
+        samp.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samp.AddressU = samp.AddressV = samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samp.MaxLOD = D3D12_FLOAT32_MAX; samp.ShaderRegister = 0;
+        samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 4; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 1; rsd.pStaticSamplers = &samp;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_ddgiInjectRS)))) return false;
+        auto cs = LoadOrCompileShader(L"Resource/Shaders/DdgiInject.CS.hlsl", L"cs_6_0");
+        if (!cs) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_ddgiInjectRS.Get();
+        cpd.CS = { cs->GetBufferPointer(), cs->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_ddgiInjectPSO)))) return false;
+    }
+    if (!m_ddgiResolveRS) {
+        D3D12_DESCRIPTOR_RANGE ranges[2] = {};
+        ranges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 }; // u0 accumulator
+        ranges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1, 0, 0 }; // u1 probe SH
+        D3D12_ROOT_PARAMETER params[3] = {};
+        params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        for (uint32_t i = 0; i < 2; ++i) {
+            params[1 + i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[1 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[1 + i].DescriptorTable.pDescriptorRanges   = &ranges[i];
+            params[1 + i].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC rsd = {};
+        rsd.NumParameters = 3; rsd.pParameters = params;
+        rsd.NumStaticSamplers = 0; rsd.pStaticSamplers = nullptr;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) return false;
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&m_ddgiResolveRS)))) return false;
+        auto cs = LoadOrCompileShader(L"Resource/Shaders/DdgiResolve.CS.hlsl", L"cs_6_0");
+        if (!cs) return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cpd = {};
+        cpd.pRootSignature = m_ddgiResolveRS.Get();
+        cpd.CS = { cs->GetBufferPointer(), cs->GetBufferSize() };
+        if (FAILED(dev->CreateComputePipelineState(&cpd, IID_PPV_ARGS(&m_ddgiResolvePSO)))) return false;
+    }
+    if (!m_ddgiInjectCB[0]) {
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i) {
+            m_ddgiInjectCB[i]  = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ddgiInjectCBMapped[i]);
+            m_ddgiResolveCB[i] = CreateUploadCB(dev, TONEMAP_CB_SIZE, &m_ddgiResolveCBMapped[i]);
+        }
+    }
+    return true;
+}
+
+void PostProcessPass::ExecuteDdgiCapture(ID3D12GraphicsCommandList* cmd,
+                                         GraphicsDevice& gfx,
+                                         ID3D12Resource* depthResource,
+                                         uint32_t depthSRVSlot,
+                                         const Matrix4x4& invViewProj,
+                                         DdgiVolume& vol,
+                                         const float gridOrigin[3],
+                                         const float gridSpacing[3],
+                                         const uint32_t gridDims[3],
+                                         uint32_t frameIndex,
+                                         uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!DdgiEnabled || !m_ddgiInjectPSO || !m_ddgiResolvePSO || !depthResource) return;
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
+    uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
+
+    struct InjectCB {
+        float invVP[16];
+        float viewport[4];
+        float rtW, rtH; int offX, offY;
+        float gOrigin[3]; float _p1;
+        float gSpacing[3]; float _p2;
+        uint32_t gx, gy, gz, _p3;
+    };
+    InjectCB icb = {};
+    memcpy(icb.invVP, invViewProj.v, 64);
+    icb.viewport[0] = (float)vpX; icb.viewport[1] = (float)vpY;
+    icb.viewport[2] = (float)vpW; icb.viewport[3] = (float)vpH;
+    icb.rtW = (float)m_width; icb.rtH = (float)m_height;
+    uint32_t o = frameIndex & 3u;              // rotate the 2x2 injection offset each frame
+    icb.offX = (int)(o & 1u); icb.offY = (int)((o >> 1) & 1u);
+    icb.gOrigin[0] = gridOrigin[0]; icb.gOrigin[1] = gridOrigin[1]; icb.gOrigin[2] = gridOrigin[2];
+    icb.gSpacing[0] = gridSpacing[0]; icb.gSpacing[1] = gridSpacing[1]; icb.gSpacing[2] = gridSpacing[2];
+    icb.gx = gridDims[0]; icb.gy = gridDims[1]; icb.gz = gridDims[2];
+    memcpy(m_ddgiInjectCBMapped[fi], &icb, sizeof(icb));
+
+    struct ResolveCB { uint32_t numProbes; float blendRate; float _p0, _p1; };
+    ResolveCB rcb = {};
+    rcb.numProbes = vol.GetNumProbes();
+    rcb.blendRate = DdgiBlendRate;
+    memcpy(m_ddgiResolveCBMapped[fi], &rcb, sizeof(rcb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    // ── Inject: scatter lit radiance into the accumulator ──
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    cmd->SetComputeRootSignature(m_ddgiInjectRS.Get());
+    cmd->SetPipelineState(m_ddgiInjectPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ddgiInjectCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(vol.GetAccumUAVSlot()));
+    DispatchCompute(cmd, (m_width + 1) / 2, (m_height + 1) / 2);  // half-res: 1/4 the atomic injections
+    UAVBarrier(cmd, nullptr); // global UAV barrier: resolve must see inject's accumulator writes
+
+    // ── Resolve: accumulator → probe SH (temporal blend), then zero accumulator ──
+    Barrier(cmd, vol.ProbeResource(), vol.ProbeState(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    vol.SetProbeState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    cmd->SetComputeRootSignature(m_ddgiResolveRS.Get());
+    cmd->SetPipelineState(m_ddgiResolvePSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ddgiResolveCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(vol.GetAccumUAVSlot()));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(vol.GetProbeUAVSlot()));
+    uint32_t groups = (vol.GetNumProbes() + 63) / 64;
+    cmd->Dispatch(groups, 1, 1);
+    // Global UAV barrier: probe writes ordered before the apply read, AND the accumulator zeroing
+    // ordered before next frame's injection (the accumulator has no state transition to serialise it).
+    UAVBarrier(cmd, nullptr);
+
+    // Leave the probe buffer readable for the apply pass; restore depth/HDR for the rest of the frame.
+    Barrier(cmd, vol.ProbeResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    vol.SetProbeState(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+}
+
+void PostProcessPass::ExecuteDdgi(ID3D12GraphicsCommandList* cmd,
+                                  GraphicsDevice& gfx,
+                                  const GBuffer& gbuffer,
+                                  ID3D12Resource* depthResource,
+                                  uint32_t depthSRVSlot,
+                                  const Matrix4x4& invViewProj,
+                                  uint32_t probeSRVSlot,
+                                  const float gridOrigin[3],
+                                  const float gridSpacing[3],
+                                  const uint32_t gridDims[3],
+                                  uint32_t frameIndex,
+                                  uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH) {
+    if (!DdgiEnabled || !m_ddgiTex || !m_ddgiPSO || !depthResource) return;
+    if (vpW == 0 || vpH == 0) { vpX = 0; vpY = 0; vpW = m_width; vpH = m_height; }
+
+    uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
+
+    struct DdgiCB {
+        float invVP[16];
+        float viewport[4];
+        float rtW, rtH, intensity, _p0;
+        float gOrigin[3]; float _p1;
+        float gSpacing[3]; float _p2;
+        uint32_t gx, gy, gz, _p3;
+    };
+    DdgiCB cb = {};
+    memcpy(cb.invVP, invViewProj.v, 64);
+    cb.viewport[0] = (float)vpX; cb.viewport[1] = (float)vpY;
+    cb.viewport[2] = (float)vpW; cb.viewport[3] = (float)vpH;
+    cb.rtW = (float)m_width; cb.rtH = (float)m_height; cb.intensity = DdgiIntensity;
+    cb.gOrigin[0] = gridOrigin[0]; cb.gOrigin[1] = gridOrigin[1]; cb.gOrigin[2] = gridOrigin[2];
+    cb.gSpacing[0] = gridSpacing[0]; cb.gSpacing[1] = gridSpacing[1]; cb.gSpacing[2] = gridSpacing[2];
+    cb.gx = gridDims[0]; cb.gy = gridDims[1]; cb.gz = gridDims[2];
+    memcpy(m_ddgiCBMapped[fi], &cb, sizeof(cb));
+
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    ID3D12Resource* normalRes = gbuffer.GetResource(1);
+    ID3D12Resource* albedoRes = gbuffer.GetResource(0);
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_hdrState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, albedoRes, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, m_ddgiTex.Get(), m_ddgiState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_ddgiState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    cmd->SetComputeRootSignature(m_ddgiRS.Get());
+    cmd->SetPipelineState(m_ddgiPSO.Get());
+    cmd->SetComputeRootConstantBufferView(0, m_ddgiCB[fi]->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(1, gfx.GetSRVGPUHandle(m_hdrSRVSlot));
+    cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(depthSRVSlot));
+    cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(1)));
+    cmd->SetComputeRootDescriptorTable(4, gfx.GetSRVGPUHandle(gbuffer.GetSRVSlot(0)));
+    cmd->SetComputeRootDescriptorTable(5, gfx.GetSRVGPUHandle(probeSRVSlot));
+    cmd->SetComputeRootDescriptorTable(6, gfx.GetSRVGPUHandle(m_ddgiUAVSlot));
+    DispatchCompute(cmd, m_width, m_height);
+    UAVBarrier(cmd, m_ddgiTex.Get());
+
+    Barrier(cmd, m_ddgiTex.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    m_ddgiState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    Barrier(cmd, m_hdrRT.Get(), m_hdrState, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_hdrState = D3D12_RESOURCE_STATE_COPY_DEST;
+    cmd->CopyResource(m_hdrRT.Get(), m_ddgiTex.Get());
+    Barrier(cmd, m_hdrRT.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_hdrState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    Barrier(cmd, depthResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    Barrier(cmd, normalRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    Barrier(cmd, albedoRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 // ─── Height fog ───────────────────────────────────────────────────────────────

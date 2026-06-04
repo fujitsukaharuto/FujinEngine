@@ -33,7 +33,7 @@ static const GroupDef k_groups[] = {
     { 4, "RENDER",           IM_COL32( 75, 20, 95,255), IM_COL32( 92, 25,115,255), IM_COL32(188,115,235,255), IM_COL32(168, 95,215,255) },
 };
 
-static const char* s_renderModes[] = { "Sprite", "Beam", "Ribbon" };
+static const char* s_renderModes[] = { "Sprite", "Beam", "Ribbon", "Mesh" };
 static const char* s_simModes[]    = { "CPU", "GPU" };
 static const char* s_blendModes[]  = { "Alpha Blend", "Additive" };
 static const char* s_shapes[]      = { "Point", "Sphere", "Cone", "Box" };
@@ -45,6 +45,7 @@ static ImU32 RenderModeStripe(EmitterRenderMode m) {
     case EmitterRenderMode::Sprite: return IM_COL32(210,140, 40,255);
     case EmitterRenderMode::Beam:   return IM_COL32( 55,160,230,255);
     case EmitterRenderMode::Ribbon: return IM_COL32(180, 55,220,255);
+    case EmitterRenderMode::Mesh:   return IM_COL32( 90,200,120,255);
     }
     return IM_COL32(120,120,120,255);
 }
@@ -296,7 +297,7 @@ void EffectEditorPanel::DrawStack(Emitter& em) {
                 DrawModuleRow(3, m_selectedGroup, "Attractor",         g.dotCol);
             break;
         case 4: { // Render
-            const char* rn[] = { "Sprite Renderer", "Beam Renderer", "Ribbon Renderer" };
+            const char* rn[] = { "Sprite Renderer", "Beam Renderer", "Ribbon Renderer", "Mesh Renderer" };
             DrawModuleRow(4, m_selectedGroup, rn[(int)desc.RenderMode], g.dotCol);
             break;
         }
@@ -371,7 +372,7 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
 
         int mode = (int)d.RenderMode;
         Row("Render Mode");
-        if (ImGui::Combo("##rm", &mode, s_renderModes, 3)) {
+        if (ImGui::Combo("##rm", &mode, s_renderModes, 4)) {
             d.RenderMode = (EmitterRenderMode)mode;
             em.Reset();
         }
@@ -546,11 +547,30 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
         EndProps();
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Turbulence");
+        ImGui::TextDisabled("Size over Life (curve)");
+        ImGui::Separator();
+        ImGui::Checkbox("Use Size Curve", &d.Update.UseSizeCurve);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("8点カーブをSizeBaseへの倍率として寿命に沿って適用（Shrink Sizeより優先）");
+        if (d.Update.UseSizeCurve) {
+            ImGui::PlotLines("##scprev", d.Update.SizeCurve, 8, 0, nullptr, 0.0f, 2.0f, ImVec2(0, 46));
+            for (int k = 0; k < 8; ++k) {
+                if (k) ImGui::SameLine();
+                ImGui::PushID(k);
+                ImGui::VSliderFloat("##sv", ImVec2(18, 64), &d.Update.SizeCurve[k], 0.0f, 2.0f, "");
+                ImGui::PopID();
+            }
+            ImGui::TextDisabled("左=誕生 → 右=寿命末（×SizeBase）");
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Curl Noise (Turbulence)");
         ImGui::Separator();
         BeginProps();
         Row("Enable");
         ImGui::Checkbox("##tu", &d.Update.Turbulence);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("発散ゼロの渦巻き場（curl noise）。CPU/GPU共通");
         if (d.Update.Turbulence) {
             Row("Strength");
             ImGui::DragFloat("##ts", &d.Update.TurbStrength, 0.05f, 0.0f, 20.0f, "%.2f");
@@ -576,6 +596,24 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             ImGui::DragFloat("##atr", &d.Update.AttractorRadius, 0.1f, 0.1f, 100.0f, "%.1f");
         }
         EndProps();
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Collision (GPU, depth buffer)");
+        ImGui::Separator();
+        BeginProps();
+        Row("Enable");
+        ImGui::Checkbox("##coll", &d.Update.Collision);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("GPU sim専用。シーン深度に衝突（スクリーンスペース＝Niagara標準方式）");
+        if (d.Update.Collision) {
+            Row("Restitution");
+            ImGui::SliderFloat("##cre", &d.Update.Restitution, 0.0f, 1.0f, "%.2f");
+            Row("Friction");
+            ImGui::SliderFloat("##cfr", &d.Update.Friction, 0.0f, 1.0f, "%.2f");
+            Row("Push");
+            ImGui::DragFloat("##cpu", &d.Update.CollPush, 0.005f, 0.0f, 1.0f, "%.3f");
+        }
+        EndProps();
         break;
     }
 
@@ -584,10 +622,50 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
         if (d.RenderMode == EmitterRenderMode::Sprite) {
             ImGui::TextColored(ImVec4(0.75f,0.45f,0.92f,1.0f), "Sprite Renderer");
             ImGui::Separator();
-            ImGui::TextDisabled("(Shape from procedural soft circle)");
+            BeginProps();
+            Row("Texture");
+            {
+                char texBuf[256];
+                strncpy_s(texBuf, d.SpriteTexturePath.c_str(), sizeof(texBuf) - 1);
+                if (ImGui::InputText("##sprtex", texBuf, sizeof(texBuf)))
+                    d.SpriteTexturePath = texBuf;
+                // Accept a texture dragged from the Content Browser ("ASSET_PATH" payload).
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                        d.SpriteTexturePath = static_cast<const char*>(payload->Data);
+                    ImGui::EndDragDropTarget();
+                }
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("空＝プロシージャルな丸。Content Browserからドラッグ＆ドロップ可。\nスプライトシートのパスを指定するとフリップブック");
+            Row("SubUV Cols");
+            ImGui::DragInt("##subc", &d.SubUVCols, 0.1f, 1, 16);
+            Row("SubUV Rows");
+            ImGui::DragInt("##subr", &d.SubUVRows, 0.1f, 1, 16);
+            EndProps();
+            ImGui::TextDisabled("Cols×Rows>1 で寿命に沿ってコマ送り");
             ImGui::Spacing();
-            ImGui::TextDisabled("Size and colour are driven by");
-            ImGui::TextDisabled("Initialize and Update modules.");
+            ImGui::TextDisabled("Size/colour は Initialize/Update 由来");
+        }
+        else if (d.RenderMode == EmitterRenderMode::Mesh) {
+            ImGui::TextColored(ImVec4(0.75f,0.45f,0.92f,1.0f), "Mesh Renderer");
+            ImGui::Separator();
+            BeginProps();
+            Row("Mesh");
+            {
+                char meshBuf[256];
+                strncpy_s(meshBuf, d.MeshPath.c_str(), sizeof(meshBuf) - 1);
+                if (ImGui::InputText("##meshp", meshBuf, sizeof(meshBuf)))
+                    d.MeshPath = meshBuf;
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                        d.MeshPath = static_cast<const char*>(payload->Data);
+                    ImGui::EndDragDropTarget();
+                }
+            }
+            EndProps();
+            ImGui::TextDisabled("メッシュを粒ごとに描画（エミッシブ）。");
+            ImGui::TextDisabled("Size=スケール、Rotation=Y軸スピン。");
         }
         else if (d.RenderMode == EmitterRenderMode::Beam) {
             ImGui::TextColored(ImVec4(0.75f,0.45f,0.92f,1.0f), "Beam Renderer");

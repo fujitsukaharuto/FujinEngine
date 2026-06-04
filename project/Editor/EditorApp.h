@@ -14,6 +14,7 @@
 #include "Editor/Command/TransformCommand.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
+#include "implot.h"
 
 namespace Fujin {
 
@@ -49,6 +50,7 @@ private:
     void SetupDockLayout(ImGuiID dockspaceId);
     void DrawToolbar();
     void DrawFPSOverlay();
+    void DrawProfiler();
     void DrawCameraGizmos();
     void DrawGizmo();
     void DrawDebugShapes();
@@ -90,6 +92,10 @@ private:
     Actor*     m_effectEditActor = nullptr;
     float      m_dt            = 0.0f;
     float      m_fpsSmoothed   = 0.0f;
+
+    GraphicsDevice* m_gfx = nullptr;          // for the GPU profiler + VSync toggle
+    float           m_gpuMsHistory[120] = {}; // rolling total-GPU-ms sparkline
+    int             m_gpuMsHistoryPos   = 0;
 };
 
 } // namespace Fujin

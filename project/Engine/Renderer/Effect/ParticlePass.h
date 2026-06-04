@@ -10,6 +10,8 @@
 namespace Fujin {
 
 class SceneManager;
+class TextureManager;
+class GeometryManager;
 
 class ParticlePass {
 public:
@@ -17,12 +19,16 @@ public:
     void Execute(ID3D12GraphicsCommandList* cmd,
                  GraphicsDevice& gfx,
                  const SceneManager& scene,
+                 TextureManager& texMgr,
+                 GeometryManager& geoMgr,
                  const Matrix4x4& viewProj,
                  const Matrix4x4& view,
                  uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH,
                  uint32_t frameIndex,
                  float    elapsed,
-                 float    dt);
+                 float    dt,
+                 ID3D12Resource* normalRes = nullptr,   // GBuffer normal RT (GPU collision); null = none
+                 uint32_t normalSRVSlot = 0);
     void Shutdown();
 
 private:
@@ -62,6 +68,12 @@ private:
     ComPtr<ID3D12PipelineState> m_beamPSO;
     ComPtr<ID3D12PipelineState> m_beamAddPSO;     // additive blend
 
+    // Mesh-particle pipeline (unlit/emissive, depth-tested+written)
+    ComPtr<ID3D12RootSignature> m_meshRS;
+    ComPtr<ID3D12PipelineState> m_meshPSO;
+    ComPtr<ID3D12Resource>      m_meshInstanceVB[NUM_FRAMES_IN_FLIGHT];
+    InstanceVert*               m_meshInstanceMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
     // Geometry
     ComPtr<ID3D12Resource>  m_quadVB;
     ComPtr<ID3D12Resource>  m_quadIB;
@@ -76,12 +88,13 @@ private:
 
     bool CreateSpritePipeline(GraphicsDevice& gfx);
     bool CreateBeamPipeline(GraphicsDevice& gfx);
+    bool CreateMeshPipeline(GraphicsDevice& gfx);
     bool CreateBuffers(GraphicsDevice& gfx);
     bool CreateGPUComputePipelines(GraphicsDevice& gfx);
     bool CreateGPUDrawPipeline(GraphicsDevice& gfx);
 
-    void DrawSprites(ID3D12GraphicsCommandList* cmd, uint32_t frameIdx,
-                     const SceneManager& scene);
+    void DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t frameIdx,
+                     const SceneManager& scene, TextureManager& texMgr);
     uint32_t DrawBeams(ID3D12GraphicsCommandList* cmd, uint32_t frameIdx,
                        const SceneManager& scene,
                        const Vector3& camPos, float elapsed);
@@ -89,7 +102,13 @@ private:
                      const SceneManager& scene,
                      const Vector3& camPos, uint32_t beamVtxUsed);
     void DrawGPUSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx,
-                        const SceneManager& scene, uint32_t frameIdx, float dt, float elapsed);
+                        const SceneManager& scene, TextureManager& texMgr,
+                        uint32_t frameIdx, float dt, float elapsed,
+                        const Matrix4x4& viewProj,
+                        uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH,
+                        ID3D12Resource* normalRes, uint32_t normalSRVSlot);
+    void DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t frameIdx,
+                           const SceneManager& scene, GeometryManager& geoMgr);
 
     // GPU particle pipeline
     ComPtr<ID3D12RootSignature> m_gpuSpawnRS;

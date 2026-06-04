@@ -10,6 +10,32 @@ static constexpr float PI = 3.14159265f;
 static float Randf() {
     return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
+
+// ── Curl noise (CPU port of Resource/Shaders/Noise.hlsli CurlNoise_fast) ──────
+// Kept bit-for-bit equivalent to the GPU path so CPU and GPU emitters swirl identically.
+static inline float Fract(float x) { return x - std::floor(x); }
+static float HashN(Vector3 p) {
+    p = Vector3(Fract(p.x * 0.3183099f + 0.1f), Fract(p.y * 0.3183099f + 0.1f), Fract(p.z * 0.3183099f + 0.1f));
+    p = p * 17.0f;
+    return Fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+static Vector3 Noise3Fast(Vector3 p) {
+    return Vector3(HashN(p + Vector3(37.0f, 17.0f, 13.0f)),
+                   HashN(p + Vector3(11.0f, 47.0f, 19.0f)),
+                   HashN(p + Vector3(23.0f,  7.0f, 53.0f))) * 2.0f - Vector3(1.0f, 1.0f, 1.0f);
+}
+static Vector3 CurlNoiseFast(Vector3 p) {
+    const float e = 0.2f;
+    Vector3 dx(e, 0, 0), dy(0, e, 0), dz(0, 0, e);
+    Vector3 px0 = Noise3Fast(p - dx), px1 = Noise3Fast(p + dx);
+    Vector3 py0 = Noise3Fast(p - dy), py1 = Noise3Fast(p + dy);
+    Vector3 pz0 = Noise3Fast(p - dz), pz1 = Noise3Fast(p + dz);
+    Vector3 curl((py1.z - py0.z) - (pz1.y - pz0.y),
+                 (pz1.x - pz0.x) - (px1.z - px0.z),
+                 (px1.y - px0.y) - (py1.x - py0.x));
+    float len = std::sqrt(curl.x * curl.x + curl.y * curl.y + curl.z * curl.z);
+    return (len > 1e-5f) ? curl / len : Vector3(0, 0, 0);
+}
 static float RandRange(float lo, float hi) {
     return lo + Randf() * (hi - lo);
 }
@@ -73,16 +99,11 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
         p.Velocity *= std::max(0.0f, 1.0f - upd.Drag * dt);
         p.Position += p.Velocity * dt;
 
-        // Turbulence: sin-based position-sampled noise field
+        // Turbulence = divergence-free curl noise (matches the GPU update CS exactly).
         if (upd.Turbulence) {
-            float px = p.Position.x * upd.TurbFrequency;
-            float py = p.Position.y * upd.TurbFrequency;
-            float pz = p.Position.z * upd.TurbFrequency;
-            float e  = m_elapsed;
-            float nx = std::sin(px * 1.72f + py * 2.31f + e * 0.83f) * std::cos(pz * 1.13f + e * 1.21f);
-            float ny = std::sin(py * 2.17f + pz * 1.53f + e * 1.07f) * std::cos(px * 1.29f + e * 0.71f);
-            float nz = std::sin(pz * 1.89f + px * 0.93f + e * 0.97f) * std::cos(py * 1.71f + e * 1.33f);
-            p.Velocity += Vector3(nx, ny, nz) * (upd.TurbStrength * dt);
+            float te = m_elapsed * 0.3f;
+            Vector3 sp = p.Position * upd.TurbFrequency + Vector3(te, te, te);
+            p.Velocity += CurlNoiseFast(sp) * (upd.TurbStrength * dt);
         }
 
         // Point Attractor / Repulsor
@@ -125,8 +146,14 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
             }
         }
 
-        // Size over life
-        if (upd.ShrinkSize) {
+        // Size over life: curve (8-point) takes priority over the linear shrink.
+        if (upd.UseSizeCurve) {
+            float idx = std::max(0.0f, std::min(t, 1.0f)) * 7.0f;
+            int   i0  = (int)idx; int i1 = (i0 < 7) ? i0 + 1 : 7;
+            float f   = idx - (float)i0;
+            float m   = upd.SizeCurve[i0] * (1.0f - f) + upd.SizeCurve[i1] * f;
+            p.Size    = p.SizeBase * std::max(0.0f, m);
+        } else if (upd.ShrinkSize) {
             float s = 1.0f - t * (1.0f - upd.SizeEndMult);
             p.Size  = p.SizeBase * std::max(0.0f, s);
         }

@@ -16,6 +16,22 @@ cbuffer PassCB : register(b0) {
     float3   CamUp;    float _p1;
 };
 
+cbuffer SubUVCB : register(b1) {
+    int SubUVCols; int SubUVRows; int HasTexture; int _su;
+};
+
+float2 SubUV(float2 uv, float ageFrac) {
+    int cols = max(SubUVCols, 1);
+    int rows = max(SubUVRows, 1);
+    int total = cols * rows;
+    if (total <= 1) return uv;
+    int frame = (int)floor(saturate(ageFrac) * total);
+    frame = min(frame, total - 1);
+    int col = frame % cols;
+    int row = frame / cols;
+    return (float2(col, row) + uv) / float2(cols, rows);
+}
+
 struct VSOut {
     float4 pos   : SV_Position;
     float2 uv    : TEXCOORD0;
@@ -48,8 +64,9 @@ VSOut main(uint vertID : SV_VertexID, uint instID : SV_InstanceID) {
                     + CamRight * (rotC.x * sz)
                     + CamUp    * (rotC.y * sz);
 
+    float ageFrac = (p.lifetime > 0) ? (p.age / p.lifetime) : 0.0;
     o.pos   = mul(float4(worldPos, 1.0), ViewProj);
-    o.uv    = QuadUV[vertID];
+    o.uv    = SubUV(QuadUV[vertID], ageFrac);
     o.color = p.color;
     return o;
 }

@@ -5,7 +5,7 @@
 
 namespace Fujin {
 
-enum class EmitterRenderMode { Sprite, Beam, Ribbon };
+enum class EmitterRenderMode { Sprite, Beam, Ribbon, Mesh };
 enum class EmitterShape      { Point, Sphere, Cone, Box };
 enum class SimMode           { CPU, GPU };
 enum class BlendMode         { AlphaBlend, Additive };
@@ -68,6 +68,16 @@ struct UpdateModule {
     Vector3 AttractorPos        = { 0.0f, 0.0f, 0.0f };
     float   AttractorStrength   = 5.0f;
     float   AttractorRadius     = 10.0f;
+    // GPU depth-buffer collision (screen-space, GPU emitters only)
+    bool    Collision    = false;
+    float   Restitution  = 0.3f;   // bounce
+    float   Friction     = 0.3f;   // tangential damping on contact
+    float   CollPush     = 0.05f;  // world push-out per contact
+
+    // Size-over-life curve (Niagara-style): 8 multipliers applied to SizeBase across t=age/lifetime
+    // (linearly interpolated). Overrides ShrinkSize when enabled. CPU + GPU.
+    bool    UseSizeCurve = false;
+    float   SizeCurve[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
 };
 
 struct BeamModule {
@@ -115,6 +125,15 @@ struct EmitterDesc {
     int                MaxParticles = 200;
     bool               Loop         = true;
     float              Duration     = 999.0f;  // spawn stop time when Loop=false
+
+    // Sprite texture + SubUV flipbook (Niagara-style). Empty path = procedural soft circle.
+    // SubUVCols×Rows == 1×1 means the whole texture (no flipbook); >1 plays frames over lifetime.
+    std::string        SpriteTexturePath;
+    int                SubUVCols = 1;
+    int                SubUVRows = 1;
+
+    // Mesh render mode: render this mesh per particle (unlit/emissive, color-tinted).
+    std::string        MeshPath;
 
     SpawnModule  Spawn;
     InitModule   Init;

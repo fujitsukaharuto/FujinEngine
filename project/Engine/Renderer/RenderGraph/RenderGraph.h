@@ -8,6 +8,8 @@
 
 namespace Fujin {
 
+class GpuProfiler;
+
 // Lightweight render graph that tracks D3D12 resource states and inserts
 // barriers automatically before each registered pass.
 //
@@ -41,8 +43,9 @@ public:
     // Topological sort of passes by resource dependencies.
     void Compile();
 
-    // Insert barriers and run passes in sorted order.
-    void Execute(ID3D12GraphicsCommandList* cmd);
+    // Insert barriers and run passes in sorted order. If a profiler is supplied,
+    // each pass (barriers + execute) is wrapped in a GPU timing scope named after the pass.
+    void Execute(ID3D12GraphicsCommandList* cmd, GpuProfiler* profiler = nullptr);
 
     // Explicit one-off transition (e.g. restore depth after final pass for ImGui).
     void TransitionResource(ID3D12GraphicsCommandList* cmd,

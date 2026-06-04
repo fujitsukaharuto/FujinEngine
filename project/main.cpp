@@ -15,6 +15,8 @@
 #include "Engine/Core/ColliderComponent.h"
 #include "Engine/Core/RigidbodyComponent.h"
 #include "Engine/Core/RotatorComponent.h"
+#include "Engine/Core/PlayerMovementComponent.h"
+#include "Engine/Input/Input.h"
 #include "Engine/Asset/SceneSerializer.h"
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Renderer/SceneRenderer.h"
@@ -60,6 +62,17 @@ static void SetupTestScene() {
     mc->MaterialPath = "Resource/Materials/default.mat.json";
     // Tick-layer demo: spins the cube (and its parented child orbits with it) while in Play.
     cube->AddComponent<Fujin::RotatorComponent>()->DegreesPerSecond = 60.0f;
+
+    // Input-system demo: a player-controlled cube. In Play, WASD / left stick move it and Space /
+    // gamepad A makes it hop (see PlayerMovementComponent + the default mappings in Init).
+    // Demo only — delete this block (and the include) to remove.
+    auto* player = g_scene.CreateActor("Player");
+    auto* pt = player->AddComponent<Fujin::TransformComponent>();
+    pt->Position = Fujin::Vector3(-4.0f, 0.0f, 5.0f);
+    auto* pmc = player->AddComponent<Fujin::MeshComponent>();
+    pmc->MeshPath     = "Resource/Meshes/cube.obj";
+    pmc->MaterialPath = "Resource/Materials/default.mat.json";
+    player->AddComponent<Fujin::PlayerMovementComponent>();
 
     // Child attached to Cube
     auto* child = g_scene.CreateActor("CubeChild");
@@ -262,6 +275,18 @@ static bool Init() {
     g_editor.SetMaterialManager(&g_sceneRenderer.GetMaterialManager());
     g_editor.SetSceneRenderer(&g_sceneRenderer);
 
+    // Input system: device polling + UE5-style named axis/action mappings (default scheme).
+    Fujin::Input& input = Fujin::Input::Get();
+    input.Initialize(g_window.GetHWND());
+    input.BindAxisKey("MoveForward", Fujin::Key::W, +1.0f);
+    input.BindAxisKey("MoveForward", Fujin::Key::S, -1.0f);
+    input.BindAxisPad("MoveForward", Fujin::PadAxis::LeftY, +1.0f);
+    input.BindAxisKey("MoveRight", Fujin::Key::D, +1.0f);
+    input.BindAxisKey("MoveRight", Fujin::Key::A, -1.0f);
+    input.BindAxisPad("MoveRight", Fujin::PadAxis::LeftX, +1.0f);
+    input.BindAction("Jump", Fujin::Key::Space);
+    input.BindActionPad("Jump", Fujin::PadButton::A);
+
     SetupTestScene(); // always regenerate to apply latest scene changes
 
     return true;
@@ -322,6 +347,11 @@ static void Run() {
             g_physics.Reset(g_scene);
         }
         s_wasPlaying = isPlaying;
+
+        // Poll input every frame (keeps press/release edges coherent). Gate gameplay queries to Play
+        // mode AND window focus so the editor / background never drives gameplay.
+        Fujin::Input::Get().SetEnabled(isPlaying && GetForegroundWindow() == g_window.GetHWND());
+        Fujin::Input::Get().Update();
 
         // Refresh cached world transforms (editor edits, parenting) before gameplay/physics read them.
         g_scene.UpdateWorldTransforms();

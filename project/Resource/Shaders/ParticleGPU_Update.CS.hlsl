@@ -28,7 +28,26 @@ cbuffer UpdateParams : register(b0) {
     float3 AttractorPos;      // row 4
     float  AttractorRadius;
     float4 ColorMid;          // row 5
+    float4x4 ViewProj;        // rows 6-9 (matches ParticleGPU.VS: mul(float4(pos,1), ViewProj))
+    float4 Viewport;          // row 10: x,y,w,h pixels within the full RT
+    float2 RTSize;  float2 _cpad;   // row 11
+    uint Collision; float Restitution; float Friction; float CollPush;  // row 12
+    uint UseSizeCurve; float3 _sccpad;  // row 13
+    float4 SizeCurve[2];                // rows 14-15 (8 floats, tightly packed)
 };
+
+float SampleSizeCurve(float t) {
+    float idx = saturate(t) * 7.0;
+    int i0 = (int)floor(idx); int i1 = min(i0 + 1, 7); float f = idx - i0;
+    float v0 = SizeCurve[i0 >> 2][i0 & 3];
+    float v1 = SizeCurve[i1 >> 2][i1 & 3];
+    return lerp(v0, v1, f);
+}
+
+// Screen-space (depth-buffer) collision — same approach as Niagara's default GPU collision.
+Texture2D<float>  SceneDepth  : register(t0);
+Texture2D<float4> SceneNormal : register(t1);   // GBuffer RT1: world normal (rgb*2-1)
+SamplerState      PointSamp   : register(s0);
 
 #include "Noise.hlsli"
 
@@ -68,6 +87,31 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
 
+    // Screen-space depth collision: project to screen, compare against scene depth; if the particle
+    // is just behind the visible surface, bounce off the GBuffer normal (restitution + friction).
+    if (Collision) {
+        float4 clip = mul(float4(p.pos, 1.0), ViewProj);
+        if (clip.w > 1e-4) {
+            float3 ndc   = clip.xyz / clip.w;
+            float2 vpUV  = ndc.xy * float2(0.5, -0.5) + 0.5;          // [0,1] within viewport
+            if (all(vpUV >= 0.0) && all(vpUV <= 1.0) && ndc.z > 0.0 && ndc.z < 1.0) {
+                float2 fullUV  = (Viewport.xy + vpUV * Viewport.zw) / RTSize;
+                float  sceneZ  = SceneDepth.SampleLevel(PointSamp, fullUV, 0);
+                // Behind the surface (penetrating) but not by a huge NDC margin (thin shell).
+                if (sceneZ < 1.0 && ndc.z > sceneZ && (ndc.z - sceneZ) < 0.02) {
+                    float3 n  = normalize(SceneNormal.SampleLevel(PointSamp, fullUV, 0).xyz * 2.0 - 1.0);
+                    float  vn = dot(p.vel, n);
+                    if (vn < 0.0) {                                   // moving into the surface
+                        float3 vNormal  = vn * n;
+                        float3 vTangent = p.vel - vNormal;
+                        p.vel = vTangent * (1.0 - Friction) - vNormal * Restitution;
+                    }
+                    p.pos += n * CollPush;                            // nudge out of the surface
+                }
+            }
+        }
+    }
+
     if (FadeColor) {
         if (UseColorMid) {
             p.color = (t < 0.5)
@@ -78,8 +122,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
 
-    float sizeT = 1.0 - t * (1.0 - SizeEndMult);
-    p.size = ShrinkSize ? p.sizeBase * max(0.0, sizeT) : p.sizeBase;
+    if (UseSizeCurve) {
+        p.size = p.sizeBase * max(0.0, SampleSizeCurve(t));
+    } else {
+        float sizeT = 1.0 - t * (1.0 - SizeEndMult);
+        p.size = ShrinkSize ? p.sizeBase * max(0.0, sizeT) : p.sizeBase;
+    }
 
     g_particles[idx] = p;
 }

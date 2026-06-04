@@ -4,6 +4,24 @@ cbuffer PerPass : register(b0) {
     float3 CamUp;    float _p1;
 };
 
+// Per-emitter (root constants): flipbook grid + texture flag.
+cbuffer SubUVCB : register(b1) {
+    int SubUVCols; int SubUVRows; int HasTexture; int _su;
+};
+
+// Remap a [0,1] quad uv into the current flipbook frame's sub-rect based on age fraction.
+float2 SubUV(float2 uv, float ageFrac) {
+    int cols = max(SubUVCols, 1);
+    int rows = max(SubUVRows, 1);
+    int total = cols * rows;
+    if (total <= 1) return uv;
+    int frame = (int)floor(saturate(ageFrac) * total);
+    frame = min(frame, total - 1);
+    int col = frame % cols;
+    int row = frame / cols;
+    return (float2(col, row) + uv) / float2(cols, rows);
+}
+
 struct VSIn {
     // Slot 0: per-vertex quad corner
     float2 LocalXY  : POSITION;
@@ -34,7 +52,7 @@ VSOut main(VSIn v) {
 
     VSOut o;
     o.SvPos = mul(ViewProj, float4(worldPos, 1.0));
-    o.UV    = v.UV;
+    o.UV    = SubUV(v.UV, v._Pad.x);   // _Pad.x carries age/lifetime
     o.Color = v.InstColor;
     return o;
 }

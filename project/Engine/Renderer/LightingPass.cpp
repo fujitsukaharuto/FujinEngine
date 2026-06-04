@@ -322,6 +322,21 @@ void LightingPass::CullLightsToClusters(uint32_t fi, const Matrix4x4& invViewPro
     const float ratio = farZ / nearZ;
     const float invRange = (farZ - nearZ > 1e-6f) ? 1.0f / (farZ - nearZ) : 0.0f;
 
+    // Pre-cull: every cluster lies inside the camera frustum, so a point light whose sphere doesn't
+    // reach the frustum can't affect any cluster — skip it before the per-cluster tests (a big save
+    // when many lights are off-screen). Directional lights always apply. Conservative (sphere vs the
+    // 6 planes), so it never drops a light that could be visible.
+    Plane frustum[6];
+    ExtractFrustumPlanes(invViewProj.GetInverse(), frustum);
+    std::vector<uint8_t> visible(lightCount, 1);
+    for (uint32_t i = 0; i < lightCount; ++i) {
+        if (lights[i].directional) continue;            // always relevant
+        const Vector3& c = lights[i].pos; float r = lights[i].range;
+        for (int p = 0; p < 6; ++p) {
+            if (Vector3::Dot(frustum[p].n, c) + frustum[p].d < -r) { visible[i] = 0; break; }
+        }
+    }
+
     for (uint32_t cy = 0; cy < CLUSTER_Y; ++cy)
     for (uint32_t cx = 0; cx < CLUSTER_X; ++cx) {
         const float us[4] = { (float)cx / CLUSTER_X, (float)(cx + 1) / CLUSTER_X,
@@ -350,6 +365,7 @@ void LightingPass::CullLightsToClusters(uint32_t fi, const Matrix4x4& invViewPro
             uint32_t base    = cluster * CLUSTER_STRIDE;
             uint32_t n       = 0;
             for (uint32_t i = 0; i < lightCount && n < MAX_PER_CLUSTER; ++i) {
+                if (!visible[i]) continue;               // off-screen point light → skip all clusters
                 const LightCullItem& L = lights[i];
                 bool add;
                 if (L.directional) {

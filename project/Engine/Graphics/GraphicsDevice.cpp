@@ -31,6 +31,8 @@ bool GraphicsDevice::Initialize(HWND hwnd, uint32_t width, uint32_t height) {
         CreateSRVHeap();
         CreateDepthBuffer();
         CreateFence();
+        // GPU timestamp profiler (non-critical: on failure it self-disables, no profiling).
+        m_profiler.Initialize(m_device.Get(), m_commandQueue.Get(), 64, NUM_FRAMES_IN_FLIGHT);
     } catch (...) {
         return false;
     }
@@ -39,6 +41,7 @@ bool GraphicsDevice::Initialize(HWND hwnd, uint32_t width, uint32_t height) {
 
 void GraphicsDevice::Shutdown() {
     WaitForGPU();
+    m_profiler.Shutdown();
     ReleaseRenderTargets();
     ReleaseDepthBuffer();
     if (m_fenceEvent) {
@@ -93,6 +96,14 @@ void GraphicsDevice::CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height)
     ComPtr<IDXGIFactory6> factory;
     ThrowIfFailed(CreateDXGIFactory2(dxgiFlags, IID_PPV_ARGS(&factory)));
 
+    // Detect tearing support so VSync-off can present uncapped (windowed) for measurement.
+    {
+        BOOL allowTearing = FALSE;
+        if (SUCCEEDED(factory->CheckFeatureSupport(
+                DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing))))
+            m_tearingSupported = (allowTearing == TRUE);
+    }
+
     DXGI_SWAP_CHAIN_DESC1 desc = {};
     desc.BufferCount = NUM_BACK_BUFFERS;
     desc.Width       = width;
@@ -101,6 +112,7 @@ void GraphicsDevice::CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height)
     desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     desc.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     desc.SampleDesc  = { 1, 0 };
+    desc.Flags       = m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     ComPtr<IDXGISwapChain1> swapChain1;
     ThrowIfFailed(factory->CreateSwapChainForHwnd(
@@ -273,6 +285,10 @@ void GraphicsDevice::BeginFrame() {
 
     ID3D12DescriptorHeap* heaps[] = { m_srvHeap.Get() };
     m_commandList->SetDescriptorHeaps(1, heaps);
+
+    // The fence wait above guarantees this slot's previous submission finished, so the
+    // profiler can read back that frame's timestamps now without an extra GPU stall.
+    m_profiler.BeginFrame(m_frameContextIndex);
 }
 
 void GraphicsDevice::EndFrame() {
@@ -284,12 +300,17 @@ void GraphicsDevice::EndFrame() {
     barrier.Transition.Subresource         = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     m_commandList->ResourceBarrier(1, &barrier);
 
+    // Resolve this frame's timestamp queries into the readback buffer before closing.
+    m_profiler.EndFrame(m_commandList.Get());
+
     ThrowIfFailed(m_commandList->Close());
 
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(1, lists);
 
-    m_swapChain->Present(1, 0);
+    const UINT syncInterval = m_vsync ? 1u : 0u;
+    const UINT presentFlags = (!m_vsync && m_tearingSupported) ? DXGI_PRESENT_ALLOW_TEARING : 0u;
+    m_swapChain->Present(syncInterval, presentFlags);
 
     const UINT64 signalValue = ++m_fenceLastSignaled;
     m_commandQueue->Signal(m_fence.Get(), signalValue);
@@ -313,7 +334,8 @@ void GraphicsDevice::Resize(uint32_t width, uint32_t height) {
     m_width  = width;
     m_height = height;
     ThrowIfFailed(m_swapChain->ResizeBuffers(
-        NUM_BACK_BUFFERS, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0
+        NUM_BACK_BUFFERS, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,
+        m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0
     ));
     m_backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
     CreateRenderTargets();

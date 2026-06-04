@@ -124,6 +124,49 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Unindent(12.0f);
     }
 
+    // ── SSGI ───────────────────────────────────────────────────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool ssgiOpen = ImGui::CollapsingHeader("SSGI", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##ssgi_en", &pp->SsgiEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("スクリーンスペースGI（1バウンス間接拡散）有効/無効");
+
+    if (ssgiOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::BeginDisabled(!pp->SsgiEnabled);
+        ImGui::SliderFloat("Intensity##ssgi", &pp->SsgiIntensity, 0.0f, 4.0f, "%.2f");
+        ImGui::SliderFloat("Radius##ssgi",    &pp->SsgiRadius,    0.5f, 20.0f, "%.2f");
+        ImGui::SliderFloat("Thickness##ssgi", &pp->SsgiThickness, 0.05f, 2.0f, "%.2f");
+        ImGui::SliderInt("Ray Count",  &pp->SsgiRayCount,  1, 16);
+        ImGui::SliderInt("Step Count", &pp->SsgiStepCount, 2, 32);
+        ImGui::Separator();
+        ImGui::Checkbox("Denoise", &pp->SsgiDenoise);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("時間蓄積（再投影）＋エッジ保持ブラー。OFFで生のノイズ");
+        ImGui::BeginDisabled(!pp->SsgiDenoise);
+        ImGui::SliderFloat("History Blend", &pp->SsgiHistoryBlend, 0.0f, 0.98f, "%.2f");
+        ImGui::SliderInt("Blur Radius",     &pp->SsgiBlurRadius,   0, 4);
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("時間蓄積でザラつきを除去。動くと一時的に荒れて収束");
+        ImGui::EndDisabled();
+        ImGui::Unindent(12.0f);
+    }
+
+    // ── DDGI ───────────────────────────────────────────────────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool ddgiOpen = ImGui::CollapsingHeader("DDGI", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##ddgi_en", &pp->DdgiEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("プローブボリュームGI（画面外の間接光）有効/無効");
+
+    if (ddgiOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::BeginDisabled(!pp->DdgiEnabled);
+        ImGui::SliderFloat("Intensity##ddgi", &pp->DdgiIntensity, 0.0f, 4.0f, "%.2f");
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("画面外GIをカバー（SSGIは画面内）。C-1=フラット仮データ");
+        ImGui::Unindent(12.0f);
+    }
+
     // ── Height Fog ─────────────────────────────────────────────────────
     ImGui::SetNextItemAllowOverlap();
     bool fogOpen = ImGui::CollapsingHeader("Height Fog", ImGuiTreeNodeFlags_DefaultOpen);

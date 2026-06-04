@@ -16,6 +16,8 @@
 #include "Editor/Command/ICommand.h"
 #include <cmath>
 #include <cstdio>
+#include <cfloat>
+#include <vector>
 
 namespace Fujin {
 
@@ -138,6 +140,7 @@ void EditorApp::SetupDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Post Process",    dockRight);
     ImGui::DockBuilderDockWindow("Content Browser", dockBottom);
     ImGui::DockBuilderDockWindow("Render Graph",    dockBottom);
+    ImGui::DockBuilderDockWindow("GPU Profiler",    dockBottom);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -234,13 +237,81 @@ void EditorApp::DrawFPSOverlay() {
     ImGui::End();
 }
 
+// ─── GPU Profiler ────────────────────────────────────────────────────────────
+
+void EditorApp::DrawProfiler() {
+    if (!m_gfx) return;
+
+    if (ImGui::Begin("GPU Profiler")) {
+        GpuProfiler& profiler = m_gfx->GetProfiler();
+
+        // VSync uncaps the frame rate for measurement; GPU timing can be paused too.
+        bool vsync = m_gfx->GetVSync();
+        if (ImGui::Checkbox("VSync", &vsync)) m_gfx->SetVSync(vsync);
+        ImGui::SameLine();
+        bool profOn = profiler.IsEnabled();
+        if (ImGui::Checkbox("GPU timing", &profOn)) profiler.SetEnabled(profOn);
+
+        ImGui::Text("%.0f FPS", m_fpsSmoothed);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(CPU %.2f ms)", m_dt * 1000.0f);
+
+        const std::vector<GpuProfiler::Result>& results = profiler.GetResults();
+
+        // Total GPU time = sum of the top-level (depth 0) scopes.
+        double totalGpu = 0.0;
+        for (const auto& r : results)
+            if (r.depth == 0) totalGpu += r.ms;
+        ImGui::Text("GPU total: %.3f ms", totalGpu);
+
+        // Rolling sparkline of total GPU ms.
+        m_gpuMsHistory[m_gpuMsHistoryPos] = static_cast<float>(totalGpu);
+        m_gpuMsHistoryPos = (m_gpuMsHistoryPos + 1) % IM_ARRAYSIZE(m_gpuMsHistory);
+        ImGui::PlotLines("##gpuhist", m_gpuMsHistory, IM_ARRAYSIZE(m_gpuMsHistory),
+                         m_gpuMsHistoryPos, "GPU ms", 0.0f, FLT_MAX, ImVec2(-1.0f, 48.0f));
+
+        // Per-pass breakdown as a horizontal bar chart (first pass on top).
+        if (results.empty()) {
+            ImGui::TextDisabled("Enable GPU timing to see per-pass costs.");
+        } else {
+            std::vector<double>      vals;   vals.reserve(results.size());
+            std::vector<double>      ypos;   ypos.reserve(results.size());
+            std::vector<const char*> labels; labels.reserve(results.size());
+            for (size_t i = 0; i < results.size(); ++i) {
+                vals.push_back(results[i].ms);
+                ypos.push_back(static_cast<double>(i));
+                labels.push_back(results[i].name.c_str());
+            }
+            const float h = 22.0f * static_cast<float>(results.size()) + 36.0f;
+            if (ImPlot::BeginPlot("##passms", ImVec2(-1.0f, h),
+                                  ImPlotFlags_NoMouseText | ImPlotFlags_NoLegend)) {
+                ImPlot::SetupAxis(ImAxis_X1, "ms",
+                                  ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoGridLines);
+                ImPlot::SetupAxis(ImAxis_Y1, nullptr,
+                                  ImPlotAxisFlags_Invert | ImPlotAxisFlags_AutoFit |
+                                  ImPlotAxisFlags_NoGridLines);
+                ImPlot::SetupAxisTicks(ImAxis_Y1, ypos.data(),
+                                       static_cast<int>(ypos.size()), labels.data());
+                ImPlotSpec barSpec;
+                barSpec.Flags = ImPlotBarsFlags_Horizontal;
+                ImPlot::PlotBars("ms", vals.data(), static_cast<int>(vals.size()),
+                                 0.6, 0.0, barSpec);
+                ImPlot::EndPlot();
+            }
+        }
+    }
+    ImGui::End();
+}
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 bool EditorApp::Initialize(HWND hwnd, GraphicsDevice& gfx, SceneManager& scene) {
     m_scene = &scene;
+    m_gfx   = &gfx;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -295,6 +366,7 @@ void EditorApp::Shutdown() {
     m_renderPassPanel.Shutdown();
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext();
 }
 
@@ -380,6 +452,7 @@ void EditorApp::BeginFrame(float dt) {
     m_inspectorPanel.Draw(m_hierarchyPanel.GetSelectedActor());
     m_contentBrowserPanel.Draw();
     m_postProcessPanel.Draw(m_sceneRenderer ? &m_sceneRenderer->GetPostProcess() : nullptr);
+    DrawProfiler();
 
     // Effect Editor is only shown when opened from the "Edit Effect" button in Details.
     if (m_effectEditOpen && m_effectEditActor) {

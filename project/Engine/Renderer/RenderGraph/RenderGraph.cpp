@@ -1,4 +1,5 @@
 #include "RenderGraph.h"
+#include "Engine/Graphics/GpuProfiler.h"
 #include <algorithm>
 
 namespace Fujin {
@@ -103,13 +104,15 @@ void RenderGraph::DoBarrier(ID3D12GraphicsCommandList* cmd,
     m_trackedStates[e.resource] = newState;
 }
 
-void RenderGraph::Execute(ID3D12GraphicsCommandList* cmd) {
+void RenderGraph::Execute(ID3D12GraphicsCommandList* cmd, GpuProfiler* profiler) {
     constexpr D3D12_RESOURCE_STATES kSRVState =
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
     for (uint32_t passIdx : m_order) {
         auto& pass = m_passes[passIdx];
+
+        if (profiler) profiler->BeginScope(cmd, pass.name.c_str());
 
         for (auto& w : pass.writes)
             DoBarrier(cmd, w.handle, w.targetState);
@@ -118,6 +121,8 @@ void RenderGraph::Execute(ID3D12GraphicsCommandList* cmd) {
             DoBarrier(cmd, h, kSRVState);
 
         pass.execute(cmd);
+
+        if (profiler) profiler->EndScope(cmd);
     }
 }
 

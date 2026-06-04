@@ -3,6 +3,9 @@
 #include "Engine/Core/Actor.h"
 #include "Engine/Core/TransformComponent.h"
 #include "Engine/Core/ParticleComponent.h"
+#include "Engine/Asset/TextureManager.h"
+#include "Engine/Asset/GeometryManager.h"
+#include "Engine/Asset/MeshAsset.h"
 #include "Engine/Graphics/DxcHelper.h"
 #include <cmath>
 #include <algorithm>
@@ -35,15 +38,34 @@ static bool CreateUploadBuffer(ID3D12Device* dev, UINT64 size,
 
 // ── Root signature (shared by sprite and beam — both only need b0) ────────────
 static bool MakeRS(ID3D12Device* dev, ComPtr<ID3D12RootSignature>& rs) {
-    D3D12_ROOT_PARAMETER param = {};
-    param.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    param.Descriptor.ShaderRegister = 0;
-    param.ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+    // 0: CBV b0 (PerPass, VS)  1: 32-bit constants b1 (SubUV+HasTexture, VS+PS)  2: table t1 (sprite tex, PS)
+    D3D12_DESCRIPTOR_RANGE texRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1
+    D3D12_ROOT_PARAMETER params[3] = {};
+    params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[0].Descriptor.ShaderRegister = 0;
+    params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+    params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[1].Constants.ShaderRegister  = 1;
+    params[1].Constants.Num32BitValues  = 4;
+    params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    params[2].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[2].DescriptorTable.NumDescriptorRanges = 1;
+    params[2].DescriptorTable.pDescriptorRanges   = &texRange;
+    params[2].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_STATIC_SAMPLER_DESC samp = {};
+    samp.Filter   = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samp.AddressU = samp.AddressV = samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samp.MaxLOD   = D3D12_FLOAT32_MAX;
+    samp.ShaderRegister   = 0;
+    samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC desc = {};
-    desc.NumParameters  = 1;
-    desc.pParameters    = &param;
-    desc.Flags          = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    desc.NumParameters     = 3;
+    desc.pParameters       = params;
+    desc.NumStaticSamplers = 1;
+    desc.pStaticSamplers   = &samp;
+    desc.Flags             = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob, err;
     D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
@@ -218,6 +240,71 @@ bool ParticlePass::CreateSpritePipeline(GraphicsDevice& gfx) {
     return SUCCEEDED(dev->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&m_spriteAddPSO)));
 }
 
+bool ParticlePass::CreateMeshPipeline(GraphicsDevice& gfx) {
+    auto* dev = gfx.GetDevice();
+
+    // Minimal root sig: CBV b0 (PerPass, VS). No texture (unlit/emissive, color from instance).
+    {
+        D3D12_ROOT_PARAMETER p = {};
+        p.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        p.Descriptor.ShaderRegister = 0;
+        p.ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+        D3D12_ROOT_SIGNATURE_DESC d = {};
+        d.NumParameters = 1; d.pParameters = &p;
+        d.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        ComPtr<ID3DBlob> blob, err;
+        D3D12SerializeRootSignature(&d, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
+        if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                            IID_PPV_ARGS(&m_meshRS)))) return false;
+    }
+
+    auto vs = LoadOrCompileShader(L"Resource/Shaders/MeshParticle.VS.hlsl", L"vs_6_0");
+    auto ps = LoadOrCompileShader(L"Resource/Shaders/MeshParticle.PS.hlsl", L"ps_6_0");
+
+    D3D12_INPUT_ELEMENT_DESC layout[] = {
+        // Slot 0: mesh vertex (MeshVertex: pos@0, normal@12, tangent@24, uv@36; stride 44)
+        { "POSITION",  0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
+        { "NORMAL",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
+        { "TANGENT",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
+        { "TEXCOORD",  0, DXGI_FORMAT_R32G32_FLOAT,       0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
+        // Slot 1: per-instance (InstanceVert: 48 bytes)
+        { "INST_POS",  0, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INST_SIZE", 0, DXGI_FORMAT_R32_FLOAT,          1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INST_ROT",  0, DXGI_FORMAT_R32_FLOAT,          1, 16, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INST_PAD",  0, DXGI_FORMAT_R32G32B32_FLOAT,    1, 20, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INST_COL",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+    };
+
+    D3D12_RASTERIZER_DESC rast = {};
+    rast.FillMode        = D3D12_FILL_MODE_SOLID;
+    rast.CullMode        = D3D12_CULL_MODE_BACK;
+    rast.DepthClipEnable = TRUE;
+
+    D3D12_DEPTH_STENCIL_DESC ds = {};
+    ds.DepthEnable    = TRUE;
+    ds.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;   // solid meshes: write depth
+    ds.DepthFunc      = D3D12_COMPARISON_FUNC_LESS;
+
+    D3D12_BLEND_DESC blend = {};
+    blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;  // opaque
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso = {};
+    pso.pRootSignature        = m_meshRS.Get();
+    pso.VS                    = { vs->GetBufferPointer(), vs->GetBufferSize() };
+    pso.PS                    = { ps->GetBufferPointer(), ps->GetBufferSize() };
+    pso.InputLayout           = { layout, 9 };
+    pso.RasterizerState       = rast;
+    pso.BlendState            = blend;
+    pso.DepthStencilState     = ds;
+    pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
+    pso.SampleMask            = UINT_MAX;
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pso.NumRenderTargets      = 1;
+    pso.RTVFormats[0]         = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    pso.SampleDesc            = { 1, 0 };
+    return SUCCEEDED(dev->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&m_meshPSO)));
+}
+
 bool ParticlePass::CreateBeamPipeline(GraphicsDevice& gfx) {
     auto* dev = gfx.GetDevice();
     if (!MakeRS(dev, m_beamRS)) return false;
@@ -288,6 +375,10 @@ bool ParticlePass::CreateBuffers(GraphicsDevice& gfx) {
                                 m_instanceVB[i], &p)) return false;
         m_instanceMapped[i] = reinterpret_cast<InstanceVert*>(p);
 
+        if (!CreateUploadBuffer(dev, sizeof(InstanceVert) * MAX_SPRITES,
+                                m_meshInstanceVB[i], &p)) return false;
+        m_meshInstanceMapped[i] = reinterpret_cast<InstanceVert*>(p);
+
         if (!CreateUploadBuffer(dev, sizeof(BeamVert) * MAX_BEAM_VERTS,
                                 m_beamVB_buf[i], &p)) return false;
         m_beamMapped[i] = reinterpret_cast<BeamVert*>(p);
@@ -304,18 +395,36 @@ bool ParticlePass::CreateBuffers(GraphicsDevice& gfx) {
 bool ParticlePass::CreateGPUComputePipelines(GraphicsDevice& gfx) {
     auto* dev = gfx.GetDevice();
 
-    // Update CS root signature: [0]=CBV b0, [1]=UAV u0 (particles)
+    // Update CS root signature: [0]=CBV b0, [1]=UAV u0 (particles), [2]=t0 depth, [3]=t1 normal
     {
-        D3D12_ROOT_PARAMETER params[2] = {};
+        D3D12_DESCRIPTOR_RANGE depthRange  = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 }; // t0
+        D3D12_DESCRIPTOR_RANGE normalRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1
+        D3D12_ROOT_PARAMETER params[4] = {};
         params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor.ShaderRegister = 0;
         params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
         params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[1].Descriptor.ShaderRegister = 0;
         params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+        params[2].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[2].DescriptorTable.NumDescriptorRanges = 1;
+        params[2].DescriptorTable.pDescriptorRanges   = &depthRange;
+        params[2].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        params[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[3].DescriptorTable.NumDescriptorRanges = 1;
+        params[3].DescriptorTable.pDescriptorRanges   = &normalRange;
+        params[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+        D3D12_STATIC_SAMPLER_DESC samp = {};
+        samp.Filter   = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        samp.AddressU = samp.AddressV = samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samp.MaxLOD   = D3D12_FLOAT32_MAX;
+        samp.ShaderRegister = 0;
+        samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         D3D12_ROOT_SIGNATURE_DESC desc = {};
-        desc.NumParameters = 2;
-        desc.pParameters   = params;
+        desc.NumParameters     = 4;
+        desc.pParameters       = params;
+        desc.NumStaticSamplers = 1;
+        desc.pStaticSamplers   = &samp;
         ComPtr<ID3DBlob> blob, err;
         D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
         if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(),
@@ -361,18 +470,37 @@ bool ParticlePass::CreateGPUComputePipelines(GraphicsDevice& gfx) {
 bool ParticlePass::CreateGPUDrawPipeline(GraphicsDevice& gfx) {
     auto* dev = gfx.GetDevice();
 
-    // [0]=CBV b0 (VS), [1]=SRV t0 (VS) — no input assembler
-    D3D12_ROOT_PARAMETER params[2] = {};
+    // [0]=CBV b0 (VS), [1]=SRV t0 particle buffer (VS), [2]=32-bit consts b1 (SubUV, VS+PS),
+    // [3]=table t1 sprite texture (PS)
+    D3D12_DESCRIPTOR_RANGE texRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0 }; // t1
+    D3D12_ROOT_PARAMETER params[4] = {};
     params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor.ShaderRegister = 0;
     params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
     params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[1].Descriptor.ShaderRegister = 0;
     params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+    params[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[2].Constants.ShaderRegister  = 1;
+    params[2].Constants.Num32BitValues  = 4;
+    params[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    params[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[3].DescriptorTable.NumDescriptorRanges = 1;
+    params[3].DescriptorTable.pDescriptorRanges   = &texRange;
+    params[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_STATIC_SAMPLER_DESC samp = {};
+    samp.Filter   = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samp.AddressU = samp.AddressV = samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samp.MaxLOD   = D3D12_FLOAT32_MAX;
+    samp.ShaderRegister   = 0;
+    samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-    rsDesc.NumParameters = 2;
-    rsDesc.pParameters   = params;
+    rsDesc.NumParameters     = 4;
+    rsDesc.pParameters       = params;
+    rsDesc.NumStaticSamplers = 1;
+    rsDesc.pStaticSamplers   = &samp;
     ComPtr<ID3DBlob> blob, err;
     D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
     if (FAILED(dev->CreateRootSignature(0, blob->GetBufferPointer(),
@@ -439,6 +567,7 @@ bool ParticlePass::InitGPUEmitter(ID3D12Device* dev, uint64_t key, uint32_t maxP
 bool ParticlePass::Initialize(GraphicsDevice& gfx) {
     if (!CreateSpritePipeline(gfx))       return false;
     if (!CreateBeamPipeline(gfx))         return false;
+    if (!CreateMeshPipeline(gfx))         return false;
     if (!CreateBuffers(gfx))              return false;
     if (!CreateGPUComputePipelines(gfx))  return false;
     if (!CreateGPUDrawPipeline(gfx))      return false;
@@ -448,12 +577,14 @@ bool ParticlePass::Initialize(GraphicsDevice& gfx) {
 void ParticlePass::Shutdown() {
     m_spritePSO.Reset(); m_spriteAddPSO.Reset(); m_spriteRS.Reset();
     m_beamPSO.Reset();   m_beamAddPSO.Reset();   m_beamRS.Reset();
+    m_meshPSO.Reset();   m_meshRS.Reset();
     m_gpuSpawnPSO.Reset();  m_gpuSpawnRS.Reset();
     m_gpuUpdatePSO.Reset(); m_gpuUpdateRS.Reset();
     m_gpuDrawPSO.Reset();   m_gpuDrawAddPSO.Reset(); m_gpuDrawRS.Reset();
     m_quadVB.Reset();    m_quadIB.Reset();
     for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i) {
         m_instanceVB[i].Reset();
+        m_meshInstanceVB[i].Reset();
         m_beamVB_buf[i].Reset();
         m_passCB[i].Reset();
     }
@@ -465,13 +596,17 @@ void ParticlePass::Shutdown() {
 void ParticlePass::Execute(ID3D12GraphicsCommandList* cmd,
                             GraphicsDevice& gfx,
                             const SceneManager& scene,
+                            TextureManager& texMgr,
+                            GeometryManager& geoMgr,
                             const Matrix4x4& viewProj,
                             const Matrix4x4& view,
                             uint32_t vpX, uint32_t vpY,
                             uint32_t vpW, uint32_t vpH,
                             uint32_t frameIndex,
                             float elapsed,
-                            float dt)
+                            float dt,
+                            ID3D12Resource* normalRes,
+                            uint32_t normalSRVSlot)
 {
     if (vpW == 0 || vpH == 0) return;
 
@@ -494,59 +629,62 @@ void ParticlePass::Execute(ID3D12GraphicsCommandList* cmd,
     cmd->RSSetScissorRects(1, &sc);
 
     // GPU particles first (compute dispatches happen before graphics)
-    DrawGPUSprites(cmd, gfx, scene, frameIndex, dt, elapsed);
+    DrawGPUSprites(cmd, gfx, scene, texMgr, frameIndex, dt, elapsed,
+                   viewProj, vpX, vpY, vpW, vpH, normalRes, normalSRVSlot);
 
     // CPU particles
-    DrawSprites(cmd, frameIndex, scene);
+    DrawSprites(cmd, gfx, frameIndex, scene, texMgr);
+    DrawMeshParticles(cmd, frameIndex, scene, geoMgr);
     uint32_t beamVtxUsed = DrawBeams(cmd, frameIndex, scene, camPos, elapsed);
     DrawRibbons(cmd, frameIndex, scene, camPos, beamVtxUsed);
 }
 
 // ── Sprite draw ──────────────────────────────────────────────────────────────
 
-void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, uint32_t fi,
-                                const SceneManager& scene) {
-    uint32_t alphaCount = 0;
-    uint32_t addCount   = 0;
+void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t fi,
+                                const SceneManager& scene, TextureManager& texMgr) {
     InstanceVert* dst = m_instanceMapped[fi];
 
-    auto FillSprites = [&](BlendMode targetBlend, uint32_t& count, uint32_t offset) {
-        for (auto& actorPtr : scene.GetActors()) {
-            auto* pc = actorPtr->GetComponent<ParticleComponent>();
-            if (!pc) continue;
-            for (auto& em : pc->GetEmitters()) {
-                if (em.GetDesc().RenderMode != EmitterRenderMode::Sprite) continue;
-                if (em.GetDesc().Blend != targetBlend) continue;
-                float ei = em.GetDesc().EmissiveIntensity;
-                for (auto& p : em.GetParticles()) {
-                    if (!p.Active || (offset + count) >= MAX_SPRITES) continue;
-                    auto& iv    = dst[offset + count++];
-                    iv.pos[0]   = p.Position.x;
-                    iv.pos[1]   = p.Position.y;
-                    iv.pos[2]   = p.Position.z;
-                    iv.size     = p.Size;
-                    iv.rot      = p.Rotation * 3.14159f / 180.0f;
-                    iv.pad[0] = iv.pad[1] = iv.pad[2] = 0.0f;
-                    iv.color[0] = p.Color.x * ei;
-                    iv.color[1] = p.Color.y * ei;
-                    iv.color[2] = p.Color.z * ei;
-                    iv.color[3] = p.Color.w;
-                }
+    // Per-emitter draw items: each emitter has its own texture + SubUV grid, so it can't be batched
+    // with others into a single draw. We pack all emitters' instances into one buffer (running
+    // offset) and issue one DrawIndexedInstanced per emitter with its texture + SubUV root constants.
+    struct Item { uint32_t offset, count; BlendMode blend; uint32_t texSlot; int cols, rows, hasTex; };
+    std::vector<Item> items;
+    uint32_t total = 0;
+    for (auto& actorPtr : scene.GetActors()) {
+        auto* pc = actorPtr->GetComponent<ParticleComponent>();
+        if (!pc) continue;
+        for (auto& em : pc->GetEmitters()) {
+            const EmitterDesc& d = em.GetDesc();
+            if (d.RenderMode != EmitterRenderMode::Sprite) continue;
+            float ei = d.EmissiveIntensity;
+            uint32_t start = total, n = 0;
+            for (auto& p : em.GetParticles()) {
+                if (!p.Active || total >= MAX_SPRITES) continue;
+                auto& iv  = dst[total];
+                iv.pos[0] = p.Position.x; iv.pos[1] = p.Position.y; iv.pos[2] = p.Position.z;
+                iv.size   = p.Size;
+                iv.rot    = p.Rotation * 3.14159f / 180.0f;
+                iv.pad[0] = (p.Lifetime > 1e-4f) ? (p.Age / p.Lifetime) : 0.0f;   // ageFrac → flipbook
+                iv.pad[1] = iv.pad[2] = 0.0f;
+                iv.color[0] = p.Color.x * ei; iv.color[1] = p.Color.y * ei;
+                iv.color[2] = p.Color.z * ei; iv.color[3] = p.Color.w;
+                ++total; ++n;
             }
+            if (n == 0) continue;
+            bool hasTex = !d.SpriteTexturePath.empty();
+            uint32_t texSlot = hasTex ? texMgr.LoadTexture(d.SpriteTexturePath) : texMgr.GetFallbackSlot();
+            items.push_back({ start, n, d.Blend, texSlot, d.SubUVCols, d.SubUVRows, hasTex ? 1 : 0 });
         }
-    };
-
-    FillSprites(BlendMode::AlphaBlend, alphaCount, 0);
-    FillSprites(BlendMode::Additive,   addCount,   alphaCount);
-
-    if (alphaCount == 0 && addCount == 0) return;
+    }
+    if (items.empty()) return;
 
     D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
     vbvs[0].BufferLocation = m_quadVB->GetGPUVirtualAddress();
     vbvs[0].SizeInBytes    = sizeof(float) * 4 * 4;
     vbvs[0].StrideInBytes  = sizeof(float) * 4;
     vbvs[1].BufferLocation = m_instanceVB[fi]->GetGPUVirtualAddress();
-    vbvs[1].SizeInBytes    = sizeof(InstanceVert) * (alphaCount + addCount);
+    vbvs[1].SizeInBytes    = sizeof(InstanceVert) * total;
     vbvs[1].StrideInBytes  = sizeof(InstanceVert);
 
     D3D12_INDEX_BUFFER_VIEW ibv = {};
@@ -554,19 +692,73 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, uint32_t fi,
     ibv.SizeInBytes    = sizeof(uint16_t) * 6;
     ibv.Format         = DXGI_FORMAT_R16_UINT;
 
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
     cmd->SetGraphicsRootSignature(m_spriteRS.Get());
     cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmd->IASetVertexBuffers(0, 2, vbvs);
     cmd->IASetIndexBuffer(&ibv);
 
-    if (alphaCount > 0) {
-        cmd->SetPipelineState(m_spritePSO.Get());
-        cmd->DrawIndexedInstanced(6, alphaCount, 0, 0, 0);
+    for (const Item& it : items) {
+        cmd->SetPipelineState(it.blend == BlendMode::Additive ? m_spriteAddPSO.Get() : m_spritePSO.Get());
+        int subuv[4] = { it.cols, it.rows, it.hasTex, 0 };
+        cmd->SetGraphicsRoot32BitConstants(1, 4, subuv, 0);
+        cmd->SetGraphicsRootDescriptorTable(2, gfx.GetSRVGPUHandle(it.texSlot));
+        cmd->DrawIndexedInstanced(6, it.count, 0, 0, it.offset);
     }
-    if (addCount > 0) {
-        cmd->SetPipelineState(m_spriteAddPSO.Get());
-        cmd->DrawIndexedInstanced(6, addCount, 0, 0, alphaCount);
+}
+
+// ── Mesh-particle draw ───────────────────────────────────────────────────────
+
+void ParticlePass::DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t fi,
+                                      const SceneManager& scene, GeometryManager& geoMgr) {
+    InstanceVert* dst = m_meshInstanceMapped[fi];
+    struct Item { const MeshAsset* mesh; uint32_t offset, count; };
+    std::vector<Item> items;
+    uint32_t total = 0;
+    for (auto& actorPtr : scene.GetActors()) {
+        auto* pc = actorPtr->GetComponent<ParticleComponent>();
+        if (!pc) continue;
+        for (auto& em : pc->GetEmitters()) {
+            const EmitterDesc& d = em.GetDesc();
+            if (d.RenderMode != EmitterRenderMode::Mesh || d.MeshPath.empty()) continue;
+            const MeshAsset* mesh = geoMgr.LoadMesh(d.MeshPath);
+            if (!mesh || mesh->SubMeshes.empty()) continue;
+            float ei = d.EmissiveIntensity;
+            uint32_t start = total, n = 0;
+            for (auto& p : em.GetParticles()) {
+                if (!p.Active || total >= MAX_SPRITES) continue;
+                auto& iv  = dst[total];
+                iv.pos[0] = p.Position.x; iv.pos[1] = p.Position.y; iv.pos[2] = p.Position.z;
+                iv.size   = p.Size;
+                iv.rot    = p.Rotation * 3.14159f / 180.0f;
+                iv.pad[0] = iv.pad[1] = iv.pad[2] = 0.0f;
+                iv.color[0] = p.Color.x * ei; iv.color[1] = p.Color.y * ei;
+                iv.color[2] = p.Color.z * ei; iv.color[3] = p.Color.w;
+                ++total; ++n;
+            }
+            if (n > 0) items.push_back({ mesh, start, n });
+        }
+    }
+    if (items.empty()) return;
+
+    cmd->SetGraphicsRootSignature(m_meshRS.Get());
+    cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
+    cmd->SetPipelineState(m_meshPSO.Get());
+    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    D3D12_VERTEX_BUFFER_VIEW instVbv = {};
+    instVbv.BufferLocation = m_meshInstanceVB[fi]->GetGPUVirtualAddress();
+    instVbv.SizeInBytes    = sizeof(InstanceVert) * total;
+    instVbv.StrideInBytes  = sizeof(InstanceVert);
+
+    for (const Item& it : items) {
+        D3D12_VERTEX_BUFFER_VIEW vbvs[2] = { it.mesh->VBView, instVbv };
+        cmd->IASetVertexBuffers(0, 2, vbvs);
+        cmd->IASetIndexBuffer(&it.mesh->IBView);
+        for (const SubMesh& sm : it.mesh->SubMeshes)
+            cmd->DrawIndexedInstanced(sm.IndexCount, it.count, sm.StartIndex, sm.BaseVertex, it.offset);
     }
 }
 
@@ -739,14 +931,34 @@ void ParticlePass::DrawRibbons(ID3D12GraphicsCommandList* cmd, uint32_t fi,
 void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                                    GraphicsDevice& gfx,
                                    const SceneManager& scene,
-                                   uint32_t fi, float dt, float /*elapsed*/) {
+                                   TextureManager& texMgr,
+                                   uint32_t fi, float dt, float /*elapsed*/,
+                                   const Matrix4x4& gpuViewProj,
+                                   uint32_t gpuVpX, uint32_t gpuVpY, uint32_t gpuVpW, uint32_t gpuVpH,
+                                   ID3D12Resource* normalRes, uint32_t normalSRVSlot) {
     auto* dev = gfx.GetDevice();
+    // Lazily transition depth + normal to a compute-readable state for GPU collision, then bind them
+    // to every update dispatch (the shader only samples when Collision=1). Restored before the draws.
+    bool gpuDepthBound = false;
+    auto ensureDepthBound = [&]() {
+        if (gpuDepthBound) return;
+        TransitionResource(cmd, gfx.GetDepthBuffer(),
+                           D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if (normalRes)
+            TransitionResource(cmd, normalRes,
+                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+        cmd->SetDescriptorHeaps(1, heaps);
+        gpuDepthBound = true;
+    };
 
     // Collect GPU emitters that need work this frame
     struct GPUDrawEntry {
         GPUEmitterState* state;
         uint32_t          maxParticles;
         bool              additive;
+        uint32_t          texSlot;
+        int               cols, rows, hasTex;
     };
     std::vector<GPUDrawEntry> drawList;
 
@@ -870,8 +1082,14 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                 float    TurbFrequency;     uint32_t UseAttractor;    uint32_t UseColorMid;   float    AttractorStrength; // row 3
                 float    AttractorPos[3];   float    AttractorRadius; // row 4
                 float    ColorMid[4];       // row 5
+                float    ViewProj[16];      // rows 6-9
+                float    Viewport[4];       // row 10
+                float    RTSize[2];         float _cpad[2];           // row 11
+                uint32_t Collision;         float Restitution;       float Friction;         float CollPush; // row 12
+                uint32_t UseSizeCurve;      float _sccpad[3];         // row 13
+                float    SizeCurve[8];      // rows 14-15 (tightly packed, matches float4[2] in HLSL)
             };
-            static_assert(sizeof(UpdateParamsCB) == 96, "UpdateParamsCB layout mismatch");
+            static_assert(sizeof(UpdateParamsCB) == 256, "UpdateParamsCB layout mismatch");
 
             UpdateParamsCB upCB = {};
             upCB.Gravity[0]      = desc.Update.Gravity.x;
@@ -898,6 +1116,16 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             upCB.ColorMid[1]     = desc.Init.ColorMid.y;
             upCB.ColorMid[2]     = desc.Init.ColorMid.z;
             upCB.ColorMid[3]     = desc.Init.ColorMid.w;
+            memcpy(upCB.ViewProj, gpuViewProj.v, 64);
+            upCB.Viewport[0] = (float)gpuVpX; upCB.Viewport[1] = (float)gpuVpY;
+            upCB.Viewport[2] = (float)gpuVpW; upCB.Viewport[3] = (float)gpuVpH;
+            upCB.RTSize[0]   = (float)gfx.GetWidth(); upCB.RTSize[1] = (float)gfx.GetHeight();
+            upCB.Collision   = desc.Update.Collision ? 1u : 0u;
+            upCB.Restitution = desc.Update.Restitution;
+            upCB.Friction    = desc.Update.Friction;
+            upCB.CollPush    = desc.Update.CollPush;
+            upCB.UseSizeCurve = desc.Update.UseSizeCurve ? 1u : 0u;
+            for (int k = 0; k < 8; ++k) upCB.SizeCurve[k] = desc.Update.SizeCurve[k];
             memcpy(s.computeCBMapped[fi] + 256, &upCB, sizeof(upCB));
 
             // ── Transition particle buffer to UAV for compute ────────────────
@@ -923,10 +1151,13 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             }
 
             // ── CS Update ────────────────────────────────────────────────────
+            ensureDepthBound();
             cmd->SetComputeRootSignature(m_gpuUpdateRS.Get());
             cmd->SetPipelineState(m_gpuUpdatePSO.Get());
             cmd->SetComputeRootConstantBufferView(0, cbBase + 256);
             cmd->SetComputeRootUnorderedAccessView(1, s.particleBuf->GetGPUVirtualAddress());
+            cmd->SetComputeRootDescriptorTable(2, gfx.GetSRVGPUHandle(gfx.GetDepthSRVSlot()));
+            cmd->SetComputeRootDescriptorTable(3, gfx.GetSRVGPUHandle(normalRes ? normalSRVSlot : gfx.GetDepthSRVSlot()));
             {
                 uint32_t groups = (maxP + 63) / 64;
                 cmd->Dispatch(groups, 1, 1);
@@ -939,13 +1170,27 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             s.particleState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-            drawList.push_back({ &s, maxP, desc.Blend == BlendMode::Additive });
+            bool hasTex = !desc.SpriteTexturePath.empty();
+            uint32_t texSlot = hasTex ? texMgr.LoadTexture(desc.SpriteTexturePath) : texMgr.GetFallbackSlot();
+            drawList.push_back({ &s, maxP, desc.Blend == BlendMode::Additive,
+                                 texSlot, desc.SubUVCols, desc.SubUVRows, hasTex ? 1 : 0 });
         }
+    }
+
+    // Restore depth + normal to their pre-pass states (the draws below depth-test/write).
+    if (gpuDepthBound) {
+        TransitionResource(cmd, gfx.GetDepthBuffer(),
+                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        if (normalRes)
+            TransitionResource(cmd, normalRes,
+                               D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
     if (drawList.empty()) return;
 
     // ── Draw all GPU emitters ─────────────────────────────────────────────────
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
     cmd->SetGraphicsRootSignature(m_gpuDrawRS.Get());
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -955,6 +1200,9 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
         if (pso != curPSO) { cmd->SetPipelineState(pso); curPSO = pso; }
         cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
         cmd->SetGraphicsRootShaderResourceView(1, entry.state->particleBuf->GetGPUVirtualAddress());
+        int subuv[4] = { entry.cols, entry.rows, entry.hasTex, 0 };
+        cmd->SetGraphicsRoot32BitConstants(2, 4, subuv, 0);
+        cmd->SetGraphicsRootDescriptorTable(3, gfx.GetSRVGPUHandle(entry.texSlot));
         cmd->DrawInstanced(6, entry.maxParticles, 0, 0);
     }
 }

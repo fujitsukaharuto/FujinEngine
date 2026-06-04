@@ -9,12 +9,14 @@ static std::string RenderModeStr(EmitterRenderMode m) {
     case EmitterRenderMode::Sprite:  return "sprite";
     case EmitterRenderMode::Beam:    return "beam";
     case EmitterRenderMode::Ribbon:  return "ribbon";
+    case EmitterRenderMode::Mesh:    return "mesh";
     }
     return "sprite";
 }
 static EmitterRenderMode RenderModeFromStr(const std::string& s) {
     if (s == "beam")   return EmitterRenderMode::Beam;
     if (s == "ribbon") return EmitterRenderMode::Ribbon;
+    if (s == "mesh")   return EmitterRenderMode::Mesh;
     return EmitterRenderMode::Sprite;
 }
 static std::string BlendModeStr(BlendMode b) {
@@ -60,6 +62,10 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["maxParticles"]     = MaxParticles;
     j["loop"]        = Loop;
     j["duration"]    = Duration;
+    j["spriteTexture"] = SpriteTexturePath;
+    j["subUVCols"]     = SubUVCols;
+    j["subUVRows"]     = SubUVRows;
+    j["meshPath"]      = MeshPath;
 
     j["spawn"]["burstMode"]     = Spawn.BurstMode;
     j["spawn"]["ratePerSecond"] = Spawn.RatePerSecond;
@@ -95,6 +101,12 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["update"]["attractorPos"]      = Vec3J(Update.AttractorPos);
     j["update"]["attractorStrength"] = Update.AttractorStrength;
     j["update"]["attractorRadius"]   = Update.AttractorRadius;
+    j["update"]["collision"]         = Update.Collision;
+    j["update"]["restitution"]       = Update.Restitution;
+    j["update"]["friction"]          = Update.Friction;
+    j["update"]["collPush"]          = Update.CollPush;
+    j["update"]["useSizeCurve"]      = Update.UseSizeCurve;
+    j["update"]["sizeCurve"]         = Update.SizeCurve;  // array of 8
 
     j["beam"]["start"]      = Vec3J(Beam.Start);
     j["beam"]["end"]        = Vec3J(Beam.End);
@@ -113,6 +125,10 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
     MaxParticles      = j.value("maxParticles", 200);
     Loop         = j.value("loop", true);
     Duration     = j.value("duration", 999.0f);
+    SpriteTexturePath = j.value("spriteTexture", std::string());
+    SubUVCols         = j.value("subUVCols", 1);
+    SubUVRows         = j.value("subUVRows", 1);
+    MeshPath          = j.value("meshPath", std::string());
 
     if (j.contains("spawn")) {
         auto& s = j["spawn"];
@@ -154,6 +170,15 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
         Update.AttractorPos      = Vec3F(u.value("attractorPos", nlohmann::json::array()), {0,0,0});
         Update.AttractorStrength = u.value("attractorStrength", 5.0f);
         Update.AttractorRadius   = u.value("attractorRadius",   10.0f);
+        Update.Collision         = u.value("collision",   false);
+        Update.Restitution       = u.value("restitution", 0.3f);
+        Update.Friction          = u.value("friction",    0.3f);
+        Update.CollPush          = u.value("collPush",    0.05f);
+        Update.UseSizeCurve      = u.value("useSizeCurve", false);
+        if (u.contains("sizeCurve") && u["sizeCurve"].is_array()) {
+            auto& sc = u["sizeCurve"];
+            for (int k = 0; k < 8 && k < (int)sc.size(); ++k) Update.SizeCurve[k] = sc[k].get<float>();
+        }
     }
     if (j.contains("beam")) {
         auto& b = j["beam"];

@@ -8,6 +8,8 @@
 
 namespace Fujin {
 
+class DdgiVolume;
+
 class PostProcessPass {
 public:
     bool Initialize(GraphicsDevice& gfx, uint32_t width, uint32_t height);
@@ -57,6 +59,59 @@ public:
                     uint32_t frameIndex,
                     uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
 
+    // Screen-space global illumination (one-bounce indirect diffuse). Call after ParticlePass,
+    // BEFORE ExecuteSSR/ExecuteTAA/ExecuteFinal. No-op unless SsgiEnabled. Same entry/exit states and
+    // restore contract as ExecuteSSR (HDR→RENDER_TARGET, depth→DEPTH_WRITE, GBuffer normal+albedo→PSR);
+    // additively composites bounced light into the HDR RT, so the rest of the chain is unchanged.
+    void ExecuteSSGI(ID3D12GraphicsCommandList* cmd,
+                     GraphicsDevice& gfx,
+                     const GBuffer& gbuffer,
+                     ID3D12Resource* depthResource,
+                     uint32_t depthSRVSlot,
+                     ID3D12Resource* velocityResource,
+                     uint32_t velocitySRVSlot,
+                     const Matrix4x4& viewProj,
+                     const Matrix4x4& invViewProj,
+                     const Matrix4x4& viewProjPrev,
+                     const Vector3& cameraPos,
+                     float jitterDeltaU, float jitterDeltaV,
+                     uint32_t frameIndex,
+                     uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+
+    // DDGI capture — inject the lit scene's radiance into the probe volume (screen-space scatter) and
+    // resolve it into the probe SH buffer. Call once, BEFORE ExecuteDdgi (apply) and BEFORE SSGI/SSR
+    // add GI to the HDR (so injection sees a single bounce, no feedback). No-op unless DdgiEnabled.
+    // On entry HDR=RENDER_TARGET, depth=DEPTH_WRITE; both restored on exit. Leaves the probe buffer in
+    // NON_PIXEL_SHADER_RESOURCE (ready for the apply pass to read).
+    void ExecuteDdgiCapture(ID3D12GraphicsCommandList* cmd,
+                            GraphicsDevice& gfx,
+                            ID3D12Resource* depthResource,
+                            uint32_t depthSRVSlot,
+                            const Matrix4x4& invViewProj,
+                            DdgiVolume& vol,
+                            const float gridOrigin[3],
+                            const float gridSpacing[3],
+                            const uint32_t gridDims[3],
+                            uint32_t frameIndex,
+                            uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+
+    // DDGI apply — adds off-screen indirect diffuse from a probe volume into the HDR RT. Call after
+    // ParticlePass, BEFORE SSR/TAA/Final (alongside SSGI). No-op unless DdgiEnabled. Same entry/exit
+    // state contract as SSGI's first pass (HDR→RENDER_TARGET, depth→DEPTH_WRITE, GBuffer normal+albedo
+    // →PSR all restored). Additive composite, so the rest of the chain is unchanged.
+    void ExecuteDdgi(ID3D12GraphicsCommandList* cmd,
+                     GraphicsDevice& gfx,
+                     const GBuffer& gbuffer,
+                     ID3D12Resource* depthResource,
+                     uint32_t depthSRVSlot,
+                     const Matrix4x4& invViewProj,
+                     uint32_t probeSRVSlot,
+                     const float gridOrigin[3],
+                     const float gridSpacing[3],
+                     const uint32_t gridDims[3],
+                     uint32_t frameIndex,
+                     uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+
     // Exponential height fog + directional inscattering. Call after ParticlePass, BEFORE
     // ExecuteSSR/ExecuteTAA/ExecuteFinal. No-op unless FogEnabled. On entry: HDR RT in RENDER_TARGET,
     // depth in DEPTH_WRITE; both restored on exit. Composites fog into the HDR RT (blend), so the
@@ -100,6 +155,20 @@ public:
     float SsrIntensity      = 0.6f;  // overall reflection strength
     float SsrRoughnessCutoff = 0.6f; // surfaces rougher than this get no SSR
     float SsrThickness      = 0.5f;  // world-space hit tolerance
+    // ── Screen-space GI (one-bounce indirect diffuse) ──
+    bool  SsgiEnabled    = false; // off by default (zero regression / zero cost)
+    float SsgiIntensity  = 1.0f;  // overall bounce strength (0 => disabled look)
+    float SsgiRadius     = 4.0f;  // world-space max gather distance per ray
+    float SsgiThickness  = 0.5f;  // world-space hit tolerance behind a surface
+    int   SsgiRayCount   = 4;     // hemisphere rays / pixel (cost scales linearly)
+    int   SsgiStepCount  = 10;    // march steps / ray (cost scales linearly)
+    bool  SsgiDenoise      = true;  // temporal accumulation + spatial bilateral (off => raw noisy GI)
+    float SsgiHistoryBlend = 0.92f; // temporal: fraction of reprojected history kept per frame
+    int   SsgiBlurRadius   = 2;     // spatial bilateral half-extent in pixels (0 = temporal only)
+    float SsgiDepthSigma   = 0.002f;// bilateral depth tolerance (relative to depth)
+    // ── DDGI (off-screen probe-volume GI) ──
+    bool  DdgiEnabled   = false; // off by default (zero regression / zero cost)
+    float DdgiIntensity = 0.25f; // probe-volume GI strength (HDR bounce is strong; keep gentle)
     // ── Exponential height fog ──
     bool  FogEnabled        = false; // off by default (zero regression)
     float FogDensity        = 0.02f; // density at the fog height plane
@@ -179,6 +248,53 @@ private:
     ComPtr<ID3D12Resource>       m_ssrCB[NUM_FRAMES_IN_FLIGHT];
     uint8_t*                     m_ssrCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
 
+    // ── SSGI (trace → temporal accumulate → composite) ─────────────────
+    ComPtr<ID3D12Resource>       m_ssgiTex;             // R16G16B16A16: raw GI (trace), then scene+GI scratch (composite)
+    uint32_t                     m_ssgiSRVSlot = 0;
+    uint32_t                     m_ssgiUAVSlot = 0;
+    D3D12_RESOURCE_STATES        m_ssgiState   = D3D12_RESOURCE_STATE_COMMON;
+    ComPtr<ID3D12RootSignature>  m_ssgiRS;
+    ComPtr<ID3D12PipelineState>  m_ssgiPSO;
+    ComPtr<ID3D12Resource>       m_ssgiCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ssgiCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    // accumulated GI history (ping-pong across frames)
+    ComPtr<ID3D12Resource>       m_ssgiHist[2];
+    uint32_t                     m_ssgiHistSRVSlot[2] = { 0, 0 };
+    uint32_t                     m_ssgiHistUAVSlot[2] = { 0, 0 };
+    D3D12_RESOURCE_STATES        m_ssgiHistState[2]   = { D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COMMON };
+    uint32_t                     m_ssgiHistWrite      = 0;
+    bool                         m_ssgiHistValid      = false;
+    // temporal-accumulation pass
+    ComPtr<ID3D12RootSignature>  m_ssgiTemporalRS;
+    ComPtr<ID3D12PipelineState>  m_ssgiTemporalPSO;
+    ComPtr<ID3D12Resource>       m_ssgiTemporalCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ssgiTemporalCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    // composite (bilateral denoise + add to scene) pass
+    ComPtr<ID3D12RootSignature>  m_ssgiCompositeRS;
+    ComPtr<ID3D12PipelineState>  m_ssgiCompositePSO;
+    ComPtr<ID3D12Resource>       m_ssgiCompositeCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ssgiCompositeCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+
+    // ── DDGI apply ─────────────────────────────────────────────────────
+    ComPtr<ID3D12Resource>       m_ddgiTex;             // R16G16B16A16, composited scene+GI scratch
+    uint32_t                     m_ddgiSRVSlot = 0;
+    uint32_t                     m_ddgiUAVSlot = 0;
+    D3D12_RESOURCE_STATES        m_ddgiState   = D3D12_RESOURCE_STATE_COMMON;
+    ComPtr<ID3D12RootSignature>  m_ddgiRS;
+    ComPtr<ID3D12PipelineState>  m_ddgiPSO;
+    ComPtr<ID3D12Resource>       m_ddgiCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ddgiCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    // DDGI capture (screen-space inject + resolve into the probe SH buffer)
+    ComPtr<ID3D12RootSignature>  m_ddgiInjectRS;
+    ComPtr<ID3D12PipelineState>  m_ddgiInjectPSO;
+    ComPtr<ID3D12Resource>       m_ddgiInjectCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ddgiInjectCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    ComPtr<ID3D12RootSignature>  m_ddgiResolveRS;
+    ComPtr<ID3D12PipelineState>  m_ddgiResolvePSO;
+    ComPtr<ID3D12Resource>       m_ddgiResolveCB[NUM_FRAMES_IN_FLIGHT];
+    uint8_t*                     m_ddgiResolveCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
+    float DdgiBlendRate = 0.1f;  // temporal blend of the resolved probe SH per frame
+
     // ── Height fog ─────────────────────────────────────────────────────
     ComPtr<ID3D12Resource>       m_fogTex;              // R16G16B16A16, composited scene+fog
     uint32_t                     m_fogSRVSlot = 0;
@@ -204,6 +320,8 @@ private:
     bool CreateTonemapResources(GraphicsDevice& gfx);
     bool CreateTAAResources(GraphicsDevice& gfx);
     bool CreateSSRResources(GraphicsDevice& gfx);
+    bool CreateSSGIResources(GraphicsDevice& gfx);
+    bool CreateDdgiResources(GraphicsDevice& gfx);
     bool CreateFogResources(GraphicsDevice& gfx);
 
     void ReleaseResolutionResources();

@@ -8,6 +8,7 @@
 #include "Material/MaterialManager.h"
 #include "Effect/ParticlePass.h"
 #include "PostProcess/PostProcessPass.h"
+#include "GI/DdgiVolume.h"
 #include "TranslucencyPass.h"
 #include "Engine/Asset/GeometryManager.h"
 #include "Engine/Asset/TextureManager.h"
@@ -59,6 +60,7 @@ private:
     ParticlePass       m_particlePass;
     TranslucencyPass   m_translucencyPass;
     PostProcessPass    m_postProcess;
+    DdgiVolume         m_ddgi;          // DDGI probe volume (off-screen GI)
     RenderGraph      m_rg;
     float            m_totalTime = 0.0f;
 
