@@ -416,8 +416,10 @@ void EditorApp::BeginFrame(float dt) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Save Scene"))
                 SceneSerializer::Save(*m_scene, m_scenePath);
-            if (ImGui::MenuItem("Load Scene"))
+            if (ImGui::MenuItem("Load Scene")) {
                 SceneSerializer::Load(*m_scene, m_scenePath);
+                OnSceneReplaced();   // clear cached actor pointers (selection etc.) for the new scene
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Exit"))
                 PostQuitMessage(0);
@@ -453,6 +455,10 @@ void EditorApp::BeginFrame(float dt) {
     m_contentBrowserPanel.Draw();
     m_postProcessPanel.Draw(m_sceneRenderer ? &m_sceneRenderer->GetPostProcess() : nullptr);
     DrawProfiler();
+    // Must be drawn in the normal UI flow (not in Render()) — the node-editor
+    // canvas mispositions if drawn after ImGuizmo/gizmo foreground draw lists.
+    if (m_sceneRenderer)
+        m_renderPassPanel.Draw(m_sceneRenderer->GetRenderGraph());
 
     // Effect Editor is only shown when opened from the "Edit Effect" button in Details.
     if (m_effectEditOpen && m_effectEditActor) {
@@ -884,8 +890,6 @@ void EditorApp::Render(ID3D12GraphicsCommandList* cmdList) {
     DrawGizmo();
     if (m_showDebugShapes) DrawDebugShapes();
     DrawCameraGizmos();
-    if (m_sceneRenderer)
-        m_renderPassPanel.Draw(m_sceneRenderer->GetRenderGraph());
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList);
 }

@@ -129,6 +129,9 @@
     <None Include="Resource\Shaders\SSR.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
+    <None Include="Resource\Shaders\AutoExposure.CS.hlsl">
+      <Filter>Resource\Shaders</Filter>
+    </None>
     <None Include="Resource\Shaders\SSGI.CS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
@@ -217,6 +220,9 @@
       <Filter>Engine\Core</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Asset\SceneSerializer.cpp">
+      <Filter>Engine\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Asset\SaveSystem.cpp">
       <Filter>Engine\Asset</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\GraphicsDevice.cpp">
@@ -359,8 +365,23 @@
     <ClInclude Include="Engine\Core\SceneManager.h">
       <Filter>Engine\Core</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\Event.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\TimerManager.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\FootIKComponent.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Asset\SceneSerializer.h">
       <Filter>Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Asset\SaveSystem.h">
+      <Filter>Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\SaveGame.h">
+      <Filter>Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\DxcHelper.h">
       <Filter>Engine\Graphics</Filter>

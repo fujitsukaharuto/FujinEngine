@@ -1,6 +1,7 @@
 #include "GraphicsDevice.h"
 #include <cassert>
 #include <stdexcept>
+#include <cstdio>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -12,7 +13,12 @@
 namespace Fujin {
 
 static void ThrowIfFailed(HRESULT hr) {
-    if (FAILED(hr)) throw std::runtime_error("DX12 call failed");
+    if (FAILED(hr)) {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "[GraphicsDevice] DX12 call FAILED hr=0x%08X\n", (unsigned)hr);
+        OutputDebugStringA(buf);
+        throw std::runtime_error("DX12 call failed");
+    }
 }
 
 bool GraphicsDevice::Initialize(HWND hwnd, uint32_t width, uint32_t height) {

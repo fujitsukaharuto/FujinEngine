@@ -6,8 +6,7 @@
 
 namespace Fujin {
 
-bool SceneSerializer::Save(const SceneManager& scene, const std::string& filePath) {
-    nlohmann::json root;
+void SceneSerializer::SaveToJson(const SceneManager& scene, nlohmann::json& root) {
     root["version"] = 1;
     root["nextId"]  = scene.GetNextId();
     root["actors"]  = nlohmann::json::array();
@@ -16,18 +15,9 @@ bool SceneSerializer::Save(const SceneManager& scene, const std::string& filePat
         actor->ToJson(aj);
         root["actors"].push_back(std::move(aj));
     }
-    std::ofstream file(filePath);
-    if (!file) return false;
-    file << root.dump(2);
-    return true;
 }
 
-bool SceneSerializer::Load(SceneManager& scene, const std::string& filePath) {
-    std::ifstream file(filePath);
-    if (!file) return false;
-    nlohmann::json root;
-    try { file >> root; } catch (...) { return false; }
-
+bool SceneSerializer::LoadFromJson(SceneManager& scene, const nlohmann::json& root) {
     scene.Clear();
     if (root.contains("nextId")) scene.SetNextId(root["nextId"].get<uint64_t>());
     if (!root.contains("actors")) return true;
@@ -45,6 +35,23 @@ bool SceneSerializer::Load(SceneManager& scene, const std::string& filePath) {
     }
     scene.ResolveParentLinks(parentLinks);
     return true;
+}
+
+bool SceneSerializer::Save(const SceneManager& scene, const std::string& filePath) {
+    nlohmann::json root;
+    SaveToJson(scene, root);
+    std::ofstream file(filePath);
+    if (!file) return false;
+    file << root.dump(2);
+    return true;
+}
+
+bool SceneSerializer::Load(SceneManager& scene, const std::string& filePath) {
+    std::ifstream file(filePath);
+    if (!file) return false;
+    nlohmann::json root;
+    try { file >> root; } catch (...) { return false; }
+    return LoadFromJson(scene, root);
 }
 
 } // namespace Fujin

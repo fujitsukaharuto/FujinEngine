@@ -15,9 +15,13 @@
 #include "Engine/Core/ColliderComponent.h"
 #include "Engine/Core/RigidbodyComponent.h"
 #include "Engine/Core/RotatorComponent.h"
-#include "Engine/Core/PlayerMovementComponent.h"
+#include "Engine/Core/CharacterMovementComponent.h"
+#include "Engine/Core/FootIKComponent.h"
+#include "Engine/Core/TimerDemoComponent.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Asset/SceneSerializer.h"
+#include "Engine/Asset/SaveSystem.h"
+#include "Engine/Core/SaveGame.h"
 #include "Engine/Graphics/GraphicsDevice.h"
 #include "Engine/Renderer/SceneRenderer.h"
 #include "Engine/Physics/PhysicsWorld.h"
@@ -63,17 +67,6 @@ static void SetupTestScene() {
     // Tick-layer demo: spins the cube (and its parented child orbits with it) while in Play.
     cube->AddComponent<Fujin::RotatorComponent>()->DegreesPerSecond = 60.0f;
 
-    // Input-system demo: a player-controlled cube. In Play, WASD / left stick move it and Space /
-    // gamepad A makes it hop (see PlayerMovementComponent + the default mappings in Init).
-    // Demo only — delete this block (and the include) to remove.
-    auto* player = g_scene.CreateActor("Player");
-    auto* pt = player->AddComponent<Fujin::TransformComponent>();
-    pt->Position = Fujin::Vector3(-4.0f, 0.0f, 5.0f);
-    auto* pmc = player->AddComponent<Fujin::MeshComponent>();
-    pmc->MeshPath     = "Resource/Meshes/cube.obj";
-    pmc->MaterialPath = "Resource/Materials/default.mat.json";
-    player->AddComponent<Fujin::PlayerMovementComponent>();
-
     // Child attached to Cube
     auto* child = g_scene.CreateActor("CubeChild");
     auto* cht = child->AddComponent<Fujin::TransformComponent>();
@@ -82,17 +75,32 @@ static void SetupTestScene() {
     cmc->MeshPath = "Resource/Meshes/cube.obj";
     child->SetParent(cube);
 
-    // Ground plane at y=0 (cube scaled flat, top surface = y 0)
+    // Event/Timer demo: a cube that "pops" its scale every Interval seconds, driven by a looping
+    // world timer firing a multicast OnPulse event (see TimerDemoComponent). Demo only — delete this
+    // block (and the include) to remove. In Play the cube blinks bigger/smaller in discrete steps.
+    auto* timerCube = g_scene.CreateActor("TimerCube");
+    auto* tct = timerCube->AddComponent<Fujin::TransformComponent>();
+    tct->Position = Fujin::Vector3(-4.0f, 1.0f, 5.0f);
+    tct->Scale    = Fujin::Vector3(0.5f, 0.5f, 0.5f);
+    auto* tcm = timerCube->AddComponent<Fujin::MeshComponent>();
+    tcm->MeshPath     = "Resource/Meshes/cube.obj";
+    tcm->MaterialPath = "Resource/Materials/default.mat.json";
+    timerCube->AddComponent<Fujin::TimerDemoComponent>();
+
+    // Ground slab whose TOP surface sits exactly at y=0. cube.obj spans ±1, so at scale.y=1 the
+    // mesh is 2u tall; positioning the center at y=-1 puts the top face at 0 (and the bottom at -2).
     auto* ground = g_scene.CreateActor("Ground");
     auto* grndT = ground->AddComponent<Fujin::TransformComponent>();
-    grndT->Position = Fujin::Vector3(0.0f, -0.5f, 5.0f);
+    grndT->Position = Fujin::Vector3(0.0f, -1.0f, 5.0f);
     grndT->Scale    = Fujin::Vector3(20.0f, 1.0f, 20.0f);
     auto* grndM = ground->AddComponent<Fujin::MeshComponent>();
     grndM->MeshPath = "Resource/Meshes/cube.obj";
     // Static floor collider so dropped bodies come to rest (box, no rigidbody = immovable).
+    // HalfExtents.y=1 (×scale.y=1) makes the collider 2u tall too, so its top face matches the mesh at y=0.
     auto* grndCol = ground->AddComponent<Fujin::ColliderComponent>();
-    grndCol->Shape   = Fujin::ColliderShape::AABB;
-    grndCol->Channel = Fujin::CollisionChannel::WorldStatic;
+    grndCol->Shape         = Fujin::ColliderShape::AABB;
+    grndCol->HalfExtents.y = 1.0f;
+    grndCol->Channel       = Fujin::CollisionChannel::WorldStatic;
 
     // Run characters — 3 actors placed side by side with staggered phase offsets
     struct RunnerDesc { const char* name; float x; float offset; };
@@ -109,6 +117,63 @@ static void SetupTestScene() {
         rmc->MeshPath = "Resource/Meshes/run.gltf";
         auto* anim = actor->AddComponent<Fujin::AnimationComponent>();
         anim->TimeOffset = d.offset;
+    }
+
+    // Playable Fox — anim state-graph + character movement demo (the engine's UE5 "Character" analog).
+    // In Play, WASD / left stick walk the Fox on the floor; its horizontal speed drives a 1D blend
+    // space (Survey idle → Walk → Run) and the body turns to face the movement direction.
+    {
+        auto* fox = g_scene.CreateActor("Fox");
+        auto* foxT = fox->AddComponent<Fujin::TransformComponent>();
+        foxT->Position = Fujin::Vector3(-2.0f, 0.0f, 7.0f);
+        foxT->Scale    = Fujin::Vector3(0.02f, 0.02f, 0.02f);   // Fox model is ~100u tall; adjust on /run
+        auto* foxM = fox->AddComponent<Fujin::MeshComponent>();
+        foxM->MeshPath = "Resource/Meshes/Fox.gltf";
+
+        auto* foxA = fox->AddComponent<Fujin::AnimationComponent>();
+        foxA->UseBlendSpace = true;
+        foxA->Blend.Param   = "Speed";
+        foxA->Blend.Samples = {
+            { "Survey", 0.0f },   // idle look-around
+            { "Walk",   1.5f },
+            { "Run",    4.0f },
+        };
+
+        auto* foxMove = fox->AddComponent<Fujin::CharacterMovementComponent>();
+        foxMove->MaxSpeed = 4.0f;   // Sprint (Shift) → Run threshold; plain WASD walks at WalkSpeed
+
+        // Foot IK: plant the Fox's 4 paws on the ground (steps/slopes). Quadruped chains are
+        // upper→lower→paw; the front "arms" and rear "legs" of the glTF Fox skeleton.
+        auto* foxIK = fox->AddComponent<Fujin::FootIKComponent>();
+        // Relative foot IK (shift each foot only by how far its ground deviates from the body's base
+        // plane), so flat ground needs no offset tuning. FootOffset / per-leg Offset stay 0 unless a
+        // foot needs a small fine-tune on uneven terrain.
+        foxIK->PelvisBone = "b_Hip_01";
+        foxIK->Legs = {
+            { "b_RightUpperArm_06", "b_RightForeArm_07", "b_RightHand_08",    0.0f }, // front-right
+            { "b_LeftUpperArm_09",  "b_LeftForeArm_010", "b_LeftHand_011",    0.0f }, // front-left
+            { "b_LeftLeg01_015",    "b_LeftLeg02_016",   "b_LeftFoot01_017",  0.0f }, // rear-left
+            { "b_RightLeg01_019",   "b_RightLeg02_020",  "b_RightFoot01_021", 0.0f }, // rear-right
+        };
+    }
+
+    // Demo staircase in front of the Fox (+Z is "forward"/W) so step-up is visible: 4 static steps
+    // rising 0.3 each — under the Fox's MaxStepHeight (0.4), so it walks up without jumping; a step
+    // taller than that would be blocked like a wall. Static slabs from y=0 to their top, collider
+    // sized to match the mesh (cube.obj spans ±1 ⇒ HalfExtents 1). Demo only — delete to remove.
+    for (int i = 0; i < 4; ++i) {
+        float topY = 0.3f * (i + 1);
+        auto* step = g_scene.CreateActor("Step_" + std::to_string(i));
+        auto* stp = step->AddComponent<Fujin::TransformComponent>();
+        stp->Position = Fujin::Vector3(-2.0f, topY * 0.5f, 9.0f + i * 0.8f);
+        stp->Scale    = Fujin::Vector3(0.9f, topY * 0.5f, 0.4f);
+        auto* sm = step->AddComponent<Fujin::MeshComponent>();
+        sm->MeshPath     = "Resource/Meshes/cube.obj";
+        sm->MaterialPath = "Resource/Materials/default.mat.json";
+        auto* sc = step->AddComponent<Fujin::ColliderComponent>();
+        sc->Shape       = Fujin::ColliderShape::AABB;
+        sc->HalfExtents = Fujin::Vector3(1.0f, 1.0f, 1.0f);   // match cube.obj (±1) so top = mesh top
+        sc->Channel     = Fujin::CollisionChannel::WorldStatic;
     }
 
     // Steam emitter
@@ -211,36 +276,6 @@ static void SetupTestScene() {
         sbRb->Friction = 0.6f;
     }
 
-    // ── Stress / visual: a CLUSTER of many sphere-collider bodies poured onto the tilted ramp.
-    // Exercises the BVH broadphase, sphere-vs-OBB (the tilted ramp) and sphere-sphere at scale —
-    // the spheres cascade down the slope and pile on the floor. ──
-    {
-        constexpr int NX = 4, NY = 4, NZ = 4;   // 64 spheres
-        int idx = 0;
-        for (int ix = 0; ix < NX; ++ix)
-        for (int iy = 0; iy < NY; ++iy)
-        for (int iz = 0; iz < NZ; ++iz) {
-            auto* sp = g_scene.CreateActor("RampSphere_" + std::to_string(idx));
-            auto* spT = sp->AddComponent<Fujin::TransformComponent>();
-            float jitter = ((idx * 7) % 5) * 0.01f;   // tiny offset to break perfect symmetry
-            spT->Position = Fujin::Vector3(5.6f + ix * 0.5f + jitter,
-                                           4.2f + iy * 0.55f,
-                                           6.9f + iz * 0.5f);
-            spT->Scale = Fujin::Vector3(0.4f, 0.4f, 0.4f);
-            auto* spM = sp->AddComponent<Fujin::MeshComponent>();
-            spM->MeshPath     = "Resource/Meshes/cube.obj";   // no sphere mesh; collider is a sphere
-            spM->MaterialPath = "Resource/Materials/default.mat.json";
-            auto* spCol = sp->AddComponent<Fujin::ColliderComponent>();
-            spCol->Shape  = Fujin::ColliderShape::Sphere;
-            spCol->Radius = 0.2f;
-            auto* spRb = sp->AddComponent<Fujin::RigidbodyComponent>();
-            spRb->Mass        = 0.5f;
-            spRb->Restitution = 0.2f;
-            spRb->Friction    = 0.4f;
-            ++idx;
-        }
-    }
-
     // ── Clustered-lighting stress: a grid of many small point lights over the ground.
     // Far more than the old 16-light cap; the clustered culling keeps each pixel cheap. ──
     {
@@ -286,6 +321,10 @@ static bool Init() {
     input.BindAxisPad("MoveRight", Fujin::PadAxis::LeftX, +1.0f);
     input.BindAction("Jump", Fujin::Key::Space);
     input.BindActionPad("Jump", Fujin::PadButton::A);
+    input.BindAction("Sprint", Fujin::Key::Shift);              // hold to run (else WASD walks)
+    input.BindActionPad("Sprint", Fujin::PadButton::LeftShoulder);
+
+    g_scene.SetPhysicsWorld(&g_physics); // let gameplay (e.g. character ground traces) query physics
 
     SetupTestScene(); // always regenerate to apply latest scene changes
 
@@ -347,6 +386,49 @@ static void Run() {
             g_physics.Reset(g_scene);
         }
         s_wasPlaying = isPlaying;
+
+        // ── Quick save / load demo (F5 = save slot "quicksave", F9 = load it). Captures the live
+        // scene — during Play that's the current gameplay positions — into Saves/quicksave.save.json
+        // plus a tiny SaveGame data bag. On load the scene is rebuilt, so we clear editor selection,
+        // refresh world transforms and physics, and (if playing) re-fire BeginPlay + re-snapshot so
+        // loaded actors tick and Stop restores to the loaded state. Demo only — delete this block. ──
+        {
+            const bool focused = GetForegroundWindow() == g_window.GetHWND();
+            static bool s_f5Down = false, s_f9Down = false;
+            const bool f5 = focused && (GetAsyncKeyState(VK_F5) & 0x8000) != 0;
+            const bool f9 = focused && (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
+
+            if (f5 && !s_f5Down) {
+                static int s_saveCount = 0;
+                Fujin::SaveGame sg;
+                sg.SetInt("saveCount", ++s_saveCount);
+                sg.SetBool("wasPlaying", isPlaying);
+                const bool ok = Fujin::SaveSystem::SaveToSlot("quicksave", g_scene, &sg);
+                OutputDebugStringA(ok ? "[SaveSystem] quicksave written\n"
+                                      : "[SaveSystem] save FAILED\n");
+            }
+            if (f9 && !s_f9Down) {
+                Fujin::SaveGame sg;
+                if (Fujin::SaveSystem::LoadFromSlot("quicksave", g_scene, &sg)) {
+                    g_editor.OnSceneReplaced();
+                    g_scene.UpdateWorldTransforms();
+                    if (isPlaying) {
+                        g_scene.BeginPlay();    // initialize freshly loaded actors (timers etc.)
+                        s_snapshot.clear();     // Stop should now restore to the loaded state
+                        for (auto& actor : g_scene.GetActors()) {
+                            auto* tc = actor->GetComponent<Fujin::TransformComponent>();
+                            if (tc) s_snapshot[actor->GetId()] = { tc->Position, tc->Rotation, tc->Scale };
+                        }
+                    }
+                    g_physics.Reset(g_scene);
+                    OutputDebugStringA(("[SaveSystem] quicksave loaded (saveCount="
+                                        + std::to_string(sg.GetInt("saveCount")) + ")\n").c_str());
+                } else {
+                    OutputDebugStringA("[SaveSystem] no quicksave slot to load\n");
+                }
+            }
+            s_f5Down = f5; s_f9Down = f9;
+        }
 
         // Poll input every frame (keeps press/release edges coherent). Gate gameplay queries to Play
         // mode AND window focus so the editor / background never drives gameplay.

@@ -1,18 +1,10 @@
 {
     "permissions": {
         "allow": [
-            "Bash",
             "Read",
-            "Write",
-            "Edit",
-            "MultiEdit",
             "Glob",
-            "Grep",
-            "WebFetch",
-            "Task",
-            "TodoWrite",
-            "NotebookEdit"
+            "Grep"
         ],
-        "defaultMode": "bypassPermissions"
+        "defaultMode": "default"
     }
 }

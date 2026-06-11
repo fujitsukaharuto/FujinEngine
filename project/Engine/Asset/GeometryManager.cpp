@@ -340,6 +340,7 @@ static void CollectJoints(const aiNode* node, int32_t parentIdx, Skeleton& skel)
     j.Name           = node->mName.C_Str();
     j.ParentIndex    = parentIdx;
     j.BindPoseLocal  = ConvertAiMatrix(node->mTransformation);
+    j.BindLocal      = Transform::FromMatrix(j.BindPoseLocal);   // decompose once for pose blending
     skel.JointMap[j.Name] = idx;
     skel.Joints.push_back(j);
     for (uint32_t i = 0; i < node->mNumChildren; ++i)

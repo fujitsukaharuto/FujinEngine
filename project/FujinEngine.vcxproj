@@ -116,6 +116,7 @@
     <ClCompile Include="Engine\Input\Input.cpp" />
     <ClCompile Include="Engine\Core\SceneManager.cpp" />
     <ClCompile Include="Engine\Asset\SceneSerializer.cpp" />
+    <ClCompile Include="Engine\Asset\SaveSystem.cpp" />
     <ClCompile Include="Engine\Graphics\GraphicsDevice.cpp" />
     <ClCompile Include="Engine\Graphics\GpuProfiler.cpp" />
     <ClCompile Include="Engine\Math\Matrix.cpp" />
@@ -164,7 +165,12 @@
     <ClInclude Include="Engine\Asset\SkeletalMeshAsset.h" />
     <ClInclude Include="Engine\Core\LightComponent.h" />
     <ClInclude Include="Engine\Core\SceneManager.h" />
+    <ClInclude Include="Engine\Core\Event.h" />
+    <ClInclude Include="Engine\Core\TimerManager.h" />
+    <ClInclude Include="Engine\Core\FootIKComponent.h" />
     <ClInclude Include="Engine\Asset\SceneSerializer.h" />
+    <ClInclude Include="Engine\Asset\SaveSystem.h" />
+    <ClInclude Include="Engine\Core\SaveGame.h" />
     <ClInclude Include="Engine\Graphics\DxcHelper.h" />
     <ClInclude Include="Engine\Graphics\GraphicsDevice.h" />
     <ClInclude Include="Engine\Graphics\GpuProfiler.h" />
@@ -291,6 +297,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
     <None Include="Resource\Shaders\SSR.CS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="Resource\Shaders\AutoExposure.CS.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>

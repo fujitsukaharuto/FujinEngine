@@ -53,12 +53,62 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Indent(12.0f);
 
         ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Curve");
+        ImGui::SameLine(100.0f);
+        ImGui::SetNextItemWidth(-1.0f);
+        const char* curves[] = { "ACES", "AgX" };
+        ImGui::Combo("##tonemapMode", &pp->TonemapMode, curves, 2);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("トーンマップカーブ。AgX は現代 UE5 寄りの色域・コントラスト");
+
+        ImGui::BeginDisabled(pp->AutoExposureEnabled);
+        ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Exposure");
         ImGui::SameLine(100.0f);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderFloat("##exposure", &pp->Exposure, 0.1f, 8.0f, "%.2f EV");
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("HDR 画像全体の露出倍率");
+            ImGui::SetTooltip("HDR 画像全体の露出倍率 (Auto Exposure 有効時は無効)");
+        ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::Checkbox("Auto Exposure", &pp->AutoExposureEnabled);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("シーン輝度に応じて露出を自動調整 (アイアダプテーション)");
+        if (pp->AutoExposureEnabled) {
+            ImGui::Indent(12.0f);
+            ImGui::SliderFloat("Key##ae",   &pp->AutoExposureKey,   0.02f, 0.5f, "%.3f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("目標中間輝度 (大きいほど明るく)");
+            ImGui::SliderFloat("Speed##ae", &pp->AutoExposureSpeed, 0.005f, 0.5f, "%.3f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("順応の速さ (大きいほど即座に追従)");
+            ImGui::SliderFloat("Comp##ae",  &pp->ExposureCompensation, 0.1f, 4.0f, "%.2f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("自動露出への手動バイアス");
+            ImGui::SliderFloat("Min##ae",   &pp->AutoExposureMin, 0.01f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Max##ae",   &pp->AutoExposureMax, 1.0f, 16.0f, "%.1f");
+            ImGui::Unindent(12.0f);
+        }
+
+        ImGui::Unindent(12.0f);
+    }
+
+    ImGui::Spacing();
+
+    // ── Lens (vignette + chromatic aberration) ───────────────────────────────
+    if (ImGui::CollapsingHeader("Lens", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(12.0f);
+
+        ImGui::TextUnformatted("Vignette");
+        ImGui::SliderFloat("Intensity##vig", &pp->VignetteIntensity, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("四隅の暗さ (0 = 無効)");
+        ImGui::BeginDisabled(pp->VignetteIntensity <= 0.0f);
+        ImGui::SliderFloat("Softness##vig", &pp->VignetteSoftness, 0.0f, 0.95f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("暗くなり始める半径 (小さいほど中心寄り)");
+        ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Chromatic Aberration");
+        ImGui::SliderFloat("Amount##ca", &pp->ChromaticAberration, 0.0f, 3.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("レンズの色収差 (RGB の横ずれ, 0 = 無効)");
 
         ImGui::Unindent(12.0f);
     }
@@ -76,6 +126,30 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Indent(12.0f);
         ImGui::TextDisabled("有効時: マテリアルAO × SSAOマップ");
         ImGui::TextDisabled("無効時: マテリアルAOのみ");
+        ImGui::Unindent(12.0f);
+    }
+
+    ImGui::Spacing();
+
+    // ── Contact Shadows (screen-space, directional light) ───────────────
+    ImGui::SetNextItemAllowOverlap();
+    bool csOpen = ImGui::CollapsingHeader("Contact Shadows", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::Checkbox("##cs_en", &pp->ContactShadowsEnabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("スクリーンスペース・コンタクトシャドウ 有効/無効");
+
+    if (csOpen) {
+        ImGui::Indent(12.0f);
+        ImGui::BeginDisabled(!pp->ContactShadowsEnabled);
+        ImGui::SliderFloat("Length##cs",    &pp->ContactShadowLength,    0.02f, 2.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("レイの長さ (ワールド単位、大きいほど遠くまで遮蔽)");
+        ImGui::SliderFloat("Strength##cs",  &pp->ContactShadowStrength,  0.0f,  1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("遮蔽時の暗さ");
+        ImGui::SliderInt("Steps##cs",       &pp->ContactShadowSteps,     2,     32);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("マーチ回数 (多いほど高品質・高コスト)");
+        ImGui::SliderFloat("Thickness##cs", &pp->ContactShadowThickness, 0.02f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("遮蔽物の厚み判定窓");
+        ImGui::EndDisabled();
         ImGui::Unindent(12.0f);
     }
 
@@ -120,6 +194,8 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::SliderFloat("Intensity",        &pp->SsrIntensity,       0.0f, 1.0f, "%.2f");
         ImGui::SliderFloat("Roughness Cutoff", &pp->SsrRoughnessCutoff, 0.0f, 1.0f, "%.2f");
         ImGui::SliderFloat("Thickness",        &pp->SsrThickness,       0.05f, 2.0f, "%.2f");
+        ImGui::SliderFloat("DDGI Fallback",    &pp->SsrDdgiFallback,    0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("画面外の反射をDDGIプローブで補完（DDGI有効時のみ）");
         ImGui::TextDisabled("ツヤのある面ほど反射（粗い面は無効）");
         ImGui::Unindent(12.0f);
     }
@@ -162,8 +238,10 @@ void PostProcessPanel::Draw(PostProcessPass* pp) {
         ImGui::Indent(12.0f);
         ImGui::BeginDisabled(!pp->DdgiEnabled);
         ImGui::SliderFloat("Intensity##ddgi", &pp->DdgiIntensity, 0.0f, 4.0f, "%.2f");
+        ImGui::SliderFloat("Feedback##ddgi", &pp->DdgiFeedback, 0.0f, 0.95f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("マルチバウンス: プローブ間接光の再注入率 (0=単バウンス)");
         ImGui::EndDisabled();
-        ImGui::TextDisabled("画面外GIをカバー（SSGIは画面内）。C-1=フラット仮データ");
+        ImGui::TextDisabled("画面外GIをカバー（SSGIは画面内）。Feedback>0でマルチバウンス");
         ImGui::Unindent(12.0f);
     }
 

@@ -65,7 +65,7 @@ struct PointShadowData {
 class ShadowPass {
 public:
     static constexpr uint32_t CASCADE_COUNT    = 4;
-    static constexpr uint32_t SHADOW_MAP_SIZE  = 2048;
+    static constexpr uint32_t SHADOW_MAP_SIZE  = 4096; // PCSS soft shadows benefit from higher res
     static constexpr uint32_t MAX_SHADOW_SPOTS = SpotShadowData::MAX;   // spot shadow budget
     static constexpr uint32_t SPOT_MAP_SIZE    = 1024;
     static constexpr uint32_t MAX_SHADOW_POINTS = PointShadowData::MAX;  // point shadow budget

@@ -11,6 +11,16 @@ namespace Fujin {
 
 class SceneManager;
 
+// Screen-space contact shadows for the directional (sun) light: a short ray-march in screen space
+// that adds the fine contact/grounding shadows CSM is too coarse to resolve. Strength = 0 → off
+// (zero regression). Settings live on PostProcessPass; SceneRenderer forwards them here.
+struct ContactShadowSettings {
+    float    Length    = 0.30f;  // world-space ray length
+    float    Strength  = 0.0f;   // 0 = disabled
+    uint32_t Steps     = 8;      // march samples
+    float    Thickness = 0.15f;  // occluder thickness window (world units)
+};
+
 class LightingPass {
 public:
     bool Initialize(GraphicsDevice& gfx);
@@ -34,7 +44,8 @@ public:
                  uint32_t scissorW = 0, uint32_t scissorH = 0,
                  float    nearZ = 0.1f, float farZ = 1000.0f,
                  uint32_t spotShadowSRVSlot = 0,
-                 uint32_t pointShadowSRVSlot = 0);
+                 uint32_t pointShadowSRVSlot = 0,
+                 const ContactShadowSettings& contact = {});
 
     // CPU: select up to MAX_SHADOW_SPOTS shadow-casting spot lights (nearest to the camera), assign
     // stable slots, and compute the per-slot cache dirty flag (NeedsRender) from a signature of the

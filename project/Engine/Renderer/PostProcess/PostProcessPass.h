@@ -57,7 +57,11 @@ public:
                     const Matrix4x4& invViewProj,
                     const Vector3& cameraPos,
                     uint32_t frameIndex,
-                    uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH);
+                    uint32_t vpX, uint32_t vpY, uint32_t vpW, uint32_t vpH,
+                    uint32_t probeSRVSlot = 0,
+                    const float gridOrigin[3] = nullptr,
+                    const float gridSpacing[3] = nullptr,
+                    const uint32_t gridDims[3] = nullptr);
 
     // Screen-space global illumination (one-bounce indirect diffuse). Call after ParticlePass,
     // BEFORE ExecuteSSR/ExecuteTAA/ExecuteFinal. No-op unless SsgiEnabled. Same entry/exit states and
@@ -80,11 +84,13 @@ public:
 
     // DDGI capture — inject the lit scene's radiance into the probe volume (screen-space scatter) and
     // resolve it into the probe SH buffer. Call once, BEFORE ExecuteDdgi (apply) and BEFORE SSGI/SSR
-    // add GI to the HDR (so injection sees a single bounce, no feedback). No-op unless DdgiEnabled.
+    // add GI to the HDR. Injection now re-injects a fraction of the probes' own irradiance (DdgiFeedback)
+    // for multi-bounce GI; reads last frame's probe SH so it converges. No-op unless DdgiEnabled.
     // On entry HDR=RENDER_TARGET, depth=DEPTH_WRITE; both restored on exit. Leaves the probe buffer in
     // NON_PIXEL_SHADER_RESOURCE (ready for the apply pass to read).
     void ExecuteDdgiCapture(ID3D12GraphicsCommandList* cmd,
                             GraphicsDevice& gfx,
+                            const GBuffer& gbuffer,
                             ID3D12Resource* depthResource,
                             uint32_t depthSRVSlot,
                             const Matrix4x4& invViewProj,
@@ -147,7 +153,24 @@ public:
     float BloomStrength  = 0.12f;
     float BloomThreshold = 0.8f;
     float Exposure       = 0.45f; // ACES is brighter than Reinhard; tuned to match prior look
+    // ── Auto exposure (eye adaptation) ── overrides Exposure when enabled
+    bool  AutoExposureEnabled = false; // off by default (uses manual Exposure → zero regression)
+    float AutoExposureKey     = 0.18f; // target middle-grey luminance
+    float AutoExposureMin     = 0.05f; // clamp on the computed exposure multiplier
+    float AutoExposureMax     = 8.0f;
+    float AutoExposureSpeed   = 0.05f; // per-frame adaptation rate (0..1; higher = snappier)
+    float ExposureCompensation = 1.0f; // manual EV bias on top of auto exposure
+    int   TonemapMode    = 0;     // 0 = ACES (Narkowicz), 1 = AgX (modern UE5-ish look)
+    float VignetteIntensity   = 0.0f;  // 0 = off (zero regression)
+    float VignetteSoftness    = 0.5f;  // radial start: darkening ramps from here to corners
+    float ChromaticAberration = 0.0f;  // 0 = off; lateral RGB split strength
     bool  SSAOEnabled    = true;
+    // ── Contact shadows (screen-space, directional light) ── computed in LightingPass, off by default
+    bool  ContactShadowsEnabled  = false;
+    float ContactShadowLength     = 0.12f; // world-space ray length (subtle supplement, not primary)
+    float ContactShadowStrength   = 0.50f; // darkening amount when occluded
+    int   ContactShadowSteps      = 8;     // march samples
+    float ContactShadowThickness  = 0.08f; // occluder depth window (world units)
     bool  FXAAEnabled    = true;
     bool  TaaEnabled     = false; // temporal AA (motion-vector reprojection); off by default
     float TaaHistoryBlend = 0.9f; // fraction of reprojected history kept per frame
@@ -155,6 +178,7 @@ public:
     float SsrIntensity      = 0.6f;  // overall reflection strength
     float SsrRoughnessCutoff = 0.6f; // surfaces rougher than this get no SSR
     float SsrThickness      = 0.5f;  // world-space hit tolerance
+    float SsrDdgiFallback   = 1.0f;  // off-screen reflection fallback via DDGI probes (needs DDGI on)
     // ── Screen-space GI (one-bounce indirect diffuse) ──
     bool  SsgiEnabled    = false; // off by default (zero regression / zero cost)
     float SsgiIntensity  = 1.0f;  // overall bounce strength (0 => disabled look)
@@ -169,6 +193,7 @@ public:
     // ── DDGI (off-screen probe-volume GI) ──
     bool  DdgiEnabled   = false; // off by default (zero regression / zero cost)
     float DdgiIntensity = 0.25f; // probe-volume GI strength (HDR bounce is strong; keep gentle)
+    float DdgiFeedback  = 0.7f;  // multi-bounce: fraction of probe irradiance re-injected (0 = single bounce)
     // ── Exponential height fog ──
     bool  FogEnabled        = false; // off by default (zero regression)
     float FogDensity        = 0.02f; // density at the fog height plane
@@ -305,6 +330,16 @@ private:
     ComPtr<ID3D12Resource>       m_fogCB[NUM_FRAMES_IN_FLIGHT];
     uint8_t*                     m_fogCBMapped[NUM_FRAMES_IN_FLIGHT] = {};
 
+    // ── Auto exposure (GPU meter → CPU readback → adapt) ───────────────
+    ComPtr<ID3D12Resource>       m_aeLumBuf;          // DEFAULT, 1× R32_FLOAT, UAV: geometric-mean luminance
+    uint32_t                     m_aeLumUAVSlot = 0;
+    D3D12_RESOURCE_STATES        m_aeLumState   = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    ComPtr<ID3D12Resource>       m_aeReadback[NUM_FRAMES_IN_FLIGHT]; // READBACK copies (per-frame)
+    ComPtr<ID3D12RootSignature>  m_aeRS;
+    ComPtr<ID3D12PipelineState>  m_aePSO;
+    float                        m_adaptedLum  = 0.18f; // CPU adaptation state
+    uint32_t                     m_aeFrameCount = 0;    // frames since AE started (readback validity)
+
     // ── Tonemap + FXAA ─────────────────────────────────────────────────
     ComPtr<ID3D12RootSignature>  m_tonemapRS;
     ComPtr<ID3D12PipelineState>  m_tonemapPSO;
@@ -318,6 +353,7 @@ private:
     bool CreateSSAOResources(GraphicsDevice& gfx);
     bool CreateBloomResources(GraphicsDevice& gfx);
     bool CreateTonemapResources(GraphicsDevice& gfx);
+    bool CreateAutoExposureResources(GraphicsDevice& gfx);
     bool CreateTAAResources(GraphicsDevice& gfx);
     bool CreateSSRResources(GraphicsDevice& gfx);
     bool CreateSSGIResources(GraphicsDevice& gfx);

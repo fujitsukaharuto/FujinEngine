@@ -6,8 +6,11 @@
 #include <utility>
 #include <unordered_map>
 #include "Actor.h"
+#include "TimerManager.h"
 
 namespace Fujin {
+
+class PhysicsWorld;
 
 class SceneManager {
 public:
@@ -38,6 +41,18 @@ public:
     bool IsTicking() const { return m_ticking; }
     // Queue a component for deferred removal (used by Actor::RemoveComponent during a tick).
     void QueueRemoveComponent(Actor* actor, Component* c);
+
+    // This world's timer manager (UE5 GetWorld()->GetTimerManager() analog). Ticked once per frame
+    // inside Update(dt); all timers are cleared on EndPlay so they never carry into the next Play.
+    // Reach it from gameplay via GetOwner()->GetScene()->GetTimerManager().
+    TimerManager&       GetTimerManager()       { return m_timers; }
+    const TimerManager& GetTimerManager() const { return m_timers; }
+
+    // The physics world backing this scene (set by main.cpp; not owned). Gameplay reaches spatial
+    // queries through it — e.g. CharacterMovementComponent ray-casts for the ground to step up / climb
+    // slopes: GetOwner()->GetScene()->GetPhysicsWorld()->Raycast(...). Null until wired (graceful).
+    void          SetPhysicsWorld(PhysicsWorld* p) { m_physics = p; }
+    PhysicsWorld* GetPhysicsWorld() const          { return m_physics; }
 
     const std::vector<std::unique_ptr<Actor>>& GetActors() const { return m_actors; }
 
@@ -79,6 +94,9 @@ private:
     bool                  m_ticking = false;   // true while inside a TickPass → removals defer
     std::vector<uint64_t> m_pendingDestroy;    // actor ids queued for removal after the pass
     std::vector<std::pair<uint64_t, Component*>> m_pendingRemoveComp;  // (actorId, component) removals
+
+    TimerManager  m_timers;          // world timer manager, ticked in Update, cleared on EndPlay/Clear
+    PhysicsWorld* m_physics = nullptr; // backing physics world for spatial queries (not owned)
 };
 
 } // namespace Fujin

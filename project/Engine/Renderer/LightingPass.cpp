@@ -488,7 +488,8 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
                             uint32_t scissorW, uint32_t scissorH,
                             float nearZ, float farZ,
                             uint32_t spotShadowSRVSlot,
-                            uint32_t pointShadowSRVSlot) {
+                            uint32_t pointShadowSRVSlot,
+                            const ContactShadowSettings& contact) {
     uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
 
     // Camera CB layout:
@@ -496,7 +497,10 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
     //   [ 64] CameraPos       12B + pad 4B
     //   [ 80] CameraForward   12B + pad 4B
     //   [ 96] VpOffX/Y/SclX/Y 16B
-    //   [112] SSAOStrength     4B  + pad 12B
+    //   [112] SSAOStrength     4B  + LightCount 4B + ClusterGX/GY 8B
+    //   [128] ClusterGZ/MaxPerCluster/ClusterNear/ClusterFar 16B
+    //   [144] ViewProj        64B  (world→clip, for screen-space contact shadows)
+    //   [208] ContactLength/Strength/Steps/Thickness 16B
     memcpy(m_cameraMapped[fi],      invViewProj.v,   64);
     memcpy(m_cameraMapped[fi] + 64, &cameraPos,      12);
     memcpy(m_cameraMapped[fi] + 80, &cameraForward,  12);
@@ -508,6 +512,15 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
     };
     memcpy(m_cameraMapped[fi] + 96,  vpParams,    16);
     memcpy(m_cameraMapped[fi] + 112, &ssaoStrength, 4);
+
+    // ViewProj (world→clip) + contact-shadow params, used by the screen-space contact shadow march.
+    Matrix4x4 viewProj = invViewProj.GetInverse();
+    memcpy(m_cameraMapped[fi] + 144, viewProj.v, 64);
+    float contactParams[4] = {
+        contact.Length, contact.Strength,
+        *reinterpret_cast<const float*>(&contact.Steps), contact.Thickness,
+    };
+    memcpy(m_cameraMapped[fi] + 208, contactParams, 16);
 
     // Lights → StructuredBuffer (written in place, no fixed cap beyond MAX_LIGHTS).
     uint32_t lightCount = 0;

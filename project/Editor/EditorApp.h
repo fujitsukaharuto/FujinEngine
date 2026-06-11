@@ -38,6 +38,15 @@ public:
     Vector3 GetDebugCameraTarget() const { return m_debugCamera.GetTarget(); }
     bool    IsPlaying()            const { return m_isPlaying; }
 
+    // Call after the scene is replaced wholesale out from under the editor (Load Scene / SaveSystem
+    // load): drops any cached actor pointers (selection, effect-edit target) so panels never read a
+    // freed actor on the next frame.
+    void OnSceneReplaced() {
+        m_hierarchyPanel.SetSelectedActor(nullptr);
+        m_effectEditOpen  = false;
+        m_effectEditActor = nullptr;
+    }
+
     void SetViewProj(const Matrix4x4& vp) { m_viewProj = vp; }
     void SetViewAndProj(const Matrix4x4& view, const Matrix4x4& proj) {
         m_view     = view;

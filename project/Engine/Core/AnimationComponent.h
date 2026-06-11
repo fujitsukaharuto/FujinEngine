@@ -1,8 +1,11 @@
 #pragma once
 #include "Component.h"
 #include "Engine/Animation/AnimationTypes.h"
+#include "Engine/Animation/AnimStateMachine.h"
 #include <array>
 #include <string>
+#include <vector>
+#include <unordered_map>
 
 namespace Fujin {
 
@@ -15,8 +18,33 @@ public:
 
     float       TimeOffset = 0.0f;  // phase offset in seconds (shifts start point)
 
+    // ── Higher-level animation (optional, opt-in). Evaluation order in SceneRenderer:
+    //   UseStateMachine → run the state machine (states may be clips or blend spaces, cross-fades)
+    //   else UseBlendSpace → evaluate a single 1D blend space
+    //   else → play the single clip above (legacy path, unchanged).
+    bool         UseBlendSpace   = false;
+    BlendSpace1D Blend;            // 1D blend space config (when UseBlendSpace)
+    bool         UseStateMachine  = false;
+    AnimStateMachine StateMachine; // state machine config (when UseStateMachine)
+
+    // Gameplay blackboard: named floats gameplay sets each frame (e.g. SetParam("Speed", vel)).
+    // Drives blend spaces and state-machine transitions. Runtime only (not serialized).
+    std::unordered_map<std::string, float> Params;
+    void  SetParam(const std::string& name, float v) { Params[name] = v; }
+    float GetParam(const std::string& name) const {
+        auto it = Params.find(name);
+        return it != Params.end() ? it->second : 0.0f;
+    }
+
     // Runtime state (managed by SceneRenderer — do not set manually).
-    float       Time     = 0.0f;   // elapsed playback time in seconds
+    float       Time     = 0.0f;   // elapsed playback time in seconds (single-clip path)
+    float       Phase    = 0.0f;   // normalised loop phase [0,1) for blend spaces (foot-sync)
+    int         CurState = -1;     // active state machine state (-1 = uninitialised → DefaultState)
+    float       StateTime = 0.0f;  // time spent in the current state
+    int         PrevState = -1;    // state we are cross-fading FROM (-1 = none)
+    float       BlendElapsed = 0.0f; // elapsed cross-fade time
+    float       BlendDuration = 0.0f; // total cross-fade time of the active transition
+    std::vector<Transform> BlendFromPose;   // pose snapshot we cross-fade FROM on a state transition
     std::array<Matrix4x4, MAX_BONES> BonePalette;
     std::array<Matrix4x4, MAX_BONES> PrevBonePalette;   // last frame's palette (skeletal motion vectors)
     bool        PaletteReady = false;

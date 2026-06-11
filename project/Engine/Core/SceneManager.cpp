@@ -13,9 +13,19 @@ void SceneManager::UpdateWorldTransforms() {
     }
 }
 
-void SceneManager::BeginPlay()      { TickPass([](Component* c)   { c->BeginPlay(); }); }
-void SceneManager::Update(float dt) { TickPass([dt](Component* c) { c->Update(dt);  }); }
-void SceneManager::EndPlay()        { TickPass([](Component* c)   { c->EndPlay();   }); }
+void SceneManager::BeginPlay() { TickPass([](Component* c) { c->BeginPlay(); }); }
+
+void SceneManager::Update(float dt) {
+    // Fire due timers first (PrePhysics), so a timer set last frame runs before this frame's logic;
+    // a SetTimerForNextTick scheduled during the component pass below therefore fires next frame.
+    m_timers.Tick(dt);
+    TickPass([dt](Component* c) { c->Update(dt); });
+}
+
+void SceneManager::EndPlay() {
+    TickPass([](Component* c) { c->EndPlay(); });
+    m_timers.ClearAllTimers();   // don't let a stopped Play's timers bleed into the next Play
+}
 
 void SceneManager::QueueRemoveComponent(Actor* actor, Component* c) {
     if (actor && c) m_pendingRemoveComp.push_back({ actor->GetId(), c });
@@ -74,6 +84,7 @@ void SceneManager::Clear() {
     m_byId.clear();
     m_pendingDestroy.clear();
     m_pendingRemoveComp.clear();
+    m_timers.ClearAllTimers();
     m_nextId = 1;
 }
 

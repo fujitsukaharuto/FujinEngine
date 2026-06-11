@@ -121,47 +121,6 @@
       "components": [
         {
           "position": [
-            -4.0,
-            0.0,
-            5.0
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            1.0,
-            1.0,
-            1.0
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "gravity": -12.0,
-          "jumpVelocity": 5.0,
-          "moveSpeed": 4.0,
-          "type": "PlayerMovementComponent"
-        }
-      ],
-      "id": 4,
-      "name": "Player",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
             2.0,
             0.0,
             0.0
@@ -189,7 +148,7 @@
           "type": "MeshComponent"
         }
       ],
-      "id": 5,
+      "id": 4,
       "name": "CubeChild",
       "parentId": 3
     },
@@ -197,8 +156,48 @@
       "components": [
         {
           "position": [
+            -4.0,
+            1.0,
+            5.0
+          ],
+          "rotation": [
             0.0,
-            -0.5,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "interval": 0.5,
+          "popScale": 1.399999976158142,
+          "type": "TimerDemoComponent"
+        }
+      ],
+      "id": 5,
+      "name": "TimerCube",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            0.0,
+            -1.0,
             5.0
           ],
           "rotation": [
@@ -227,7 +226,7 @@
           "channel": 0,
           "halfExtents": [
             0.5,
-            0.5,
+            1.0,
             0.5
           ],
           "halfHeight": 1.0,
@@ -387,6 +386,326 @@
       "components": [
         {
           "position": [
+            -2.0,
+            0.0,
+            7.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.019999999552965164,
+            0.019999999552965164,
+            0.019999999552965164
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "",
+          "meshPath": "Resource/Meshes/Fox.gltf",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "clipName": "",
+          "loop": true,
+          "playing": true,
+          "speed": 1.0,
+          "timeOffset": 0.0,
+          "type": "AnimationComponent"
+        },
+        {
+          "acceleration": 16.0,
+          "gravity": -12.0,
+          "jumpVelocity": 5.0,
+          "maxSpeed": 4.0,
+          "maxStepHeight": 0.4000000059604645,
+          "stepSmoothness": 12.0,
+          "turnRate": 12.0,
+          "type": "CharacterMovementComponent",
+          "walkSpeed": 1.5,
+          "yawOffset": 0.0
+        },
+        {
+          "alignToNormal": true,
+          "bodyTilt": true,
+          "bodyTiltPitch": 0.699999988079071,
+          "bodyTiltRoll": 0.699999988079071,
+          "bodyTiltSmoothness": 10.0,
+          "enabled": true,
+          "footLock": true,
+          "footOffset": 0.0,
+          "footSmoothness": 12.0,
+          "lockHeight": 0.07999999821186066,
+          "lockSmoothness": 14.0,
+          "maxPelvisDrop": 0.25,
+          "maxRaise": 0.5,
+          "pelvisBone": "b_Hip_01",
+          "pelvisSmoothness": 10.0,
+          "traceDown": 0.800000011920929,
+          "traceUp": 0.5,
+          "type": "FootIKComponent",
+          "weight": 1.0
+        }
+      ],
+      "id": 10,
+      "name": "Fox",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -2.0,
+            0.15000000596046448,
+            9.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.8999999761581421,
+            0.15000000596046448,
+            0.4000000059604645
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "channel": 0,
+          "halfExtents": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "halfHeight": 1.0,
+          "isTrigger": false,
+          "offset": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.5,
+          "responses": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "shape": 1,
+          "type": "ColliderComponent"
+        }
+      ],
+      "id": 11,
+      "name": "Step_0",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -2.0,
+            0.30000001192092896,
+            9.800000190734863
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.8999999761581421,
+            0.30000001192092896,
+            0.4000000059604645
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "channel": 0,
+          "halfExtents": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "halfHeight": 1.0,
+          "isTrigger": false,
+          "offset": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.5,
+          "responses": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "shape": 1,
+          "type": "ColliderComponent"
+        }
+      ],
+      "id": 12,
+      "name": "Step_1",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -2.0,
+            0.45000001788139343,
+            10.600000381469727
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.8999999761581421,
+            0.45000001788139343,
+            0.4000000059604645
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "channel": 0,
+          "halfExtents": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "halfHeight": 1.0,
+          "isTrigger": false,
+          "offset": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.5,
+          "responses": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "shape": 1,
+          "type": "ColliderComponent"
+        }
+      ],
+      "id": 13,
+      "name": "Step_2",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
+            -2.0,
+            0.6000000238418579,
+            11.399999618530273
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.8999999761581421,
+            0.6000000238418579,
+            0.4000000059604645
+          ],
+          "type": "TransformComponent"
+        },
+        {
+          "blendMode": 0,
+          "castShadow": true,
+          "doubleSided": false,
+          "materialPath": "Resource/Materials/default.mat.json",
+          "meshPath": "Resource/Meshes/cube.obj",
+          "opacity": 1.0,
+          "type": "MeshComponent"
+        },
+        {
+          "channel": 0,
+          "halfExtents": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "halfHeight": 1.0,
+          "isTrigger": false,
+          "offset": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.5,
+          "responses": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "shape": 1,
+          "type": "ColliderComponent"
+        }
+      ],
+      "id": 14,
+      "name": "Step_3",
+      "parentId": 0
+    },
+    {
+      "components": [
+        {
+          "position": [
             -1.0,
             0.0,
             5.0
@@ -410,7 +729,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 10,
+      "id": 15,
       "name": "SteamEmitter",
       "parentId": 0
     },
@@ -441,7 +760,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 11,
+      "id": 16,
       "name": "SparkEmitter",
       "parentId": 0
     },
@@ -472,7 +791,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 12,
+      "id": 17,
       "name": "BeamEmitter",
       "parentId": 0
     },
@@ -503,7 +822,7 @@
           "type": "ParticleComponent"
         }
       ],
-      "id": 13,
+      "id": 18,
       "name": "GPUFireEmitter",
       "parentId": 0
     },
@@ -564,7 +883,7 @@
           "type": "ColliderComponent"
         }
       ],
-      "id": 14,
+      "id": 19,
       "name": "Ramp",
       "parentId": 0
     },
@@ -635,7 +954,7 @@
           "useGravity": true
         }
       ],
-      "id": 15,
+      "id": 20,
       "name": "RampBall",
       "parentId": 0
     },
@@ -706,7 +1025,7 @@
           "useGravity": true
         }
       ],
-      "id": 16,
+      "id": 21,
       "name": "RampBox",
       "parentId": 0
     },
@@ -777,7 +1096,7 @@
           "useGravity": true
         }
       ],
-      "id": 17,
+      "id": 22,
       "name": "StackBoxLower",
       "parentId": 0
     },
@@ -848,4552 +1167,8 @@
           "useGravity": true
         }
       ],
-      "id": 18,
-      "name": "StackBoxUpper",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.599999904632568,
-            4.199999809265137,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 19,
-      "name": "RampSphere_0",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.619999885559082,
-            4.199999809265137,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 20,
-      "name": "RampSphere_1",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.639999866485596,
-            4.199999809265137,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 21,
-      "name": "RampSphere_2",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.610000133514404,
-            4.199999809265137,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 22,
-      "name": "RampSphere_3",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.630000114440918,
-            4.75,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
       "id": 23,
-      "name": "RampSphere_4",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.599999904632568,
-            4.75,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 24,
-      "name": "RampSphere_5",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.619999885559082,
-            4.75,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 25,
-      "name": "RampSphere_6",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.639999866485596,
-            4.75,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 26,
-      "name": "RampSphere_7",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.610000133514404,
-            5.299999713897705,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 27,
-      "name": "RampSphere_8",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.630000114440918,
-            5.299999713897705,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 28,
-      "name": "RampSphere_9",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.599999904632568,
-            5.299999713897705,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 29,
-      "name": "RampSphere_10",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.619999885559082,
-            5.299999713897705,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 30,
-      "name": "RampSphere_11",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.639999866485596,
-            5.849999904632568,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 31,
-      "name": "RampSphere_12",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.610000133514404,
-            5.849999904632568,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 32,
-      "name": "RampSphere_13",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.630000114440918,
-            5.849999904632568,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 33,
-      "name": "RampSphere_14",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            5.599999904632568,
-            5.849999904632568,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 34,
-      "name": "RampSphere_15",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.119999885559082,
-            4.199999809265137,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 35,
-      "name": "RampSphere_16",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.139999866485596,
-            4.199999809265137,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 36,
-      "name": "RampSphere_17",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.110000133514404,
-            4.199999809265137,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 37,
-      "name": "RampSphere_18",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.130000114440918,
-            4.199999809265137,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 38,
-      "name": "RampSphere_19",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.099999904632568,
-            4.75,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 39,
-      "name": "RampSphere_20",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.119999885559082,
-            4.75,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 40,
-      "name": "RampSphere_21",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.139999866485596,
-            4.75,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 41,
-      "name": "RampSphere_22",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.110000133514404,
-            4.75,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 42,
-      "name": "RampSphere_23",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.130000114440918,
-            5.299999713897705,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 43,
-      "name": "RampSphere_24",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.099999904632568,
-            5.299999713897705,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 44,
-      "name": "RampSphere_25",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.119999885559082,
-            5.299999713897705,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 45,
-      "name": "RampSphere_26",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.139999866485596,
-            5.299999713897705,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 46,
-      "name": "RampSphere_27",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.110000133514404,
-            5.849999904632568,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 47,
-      "name": "RampSphere_28",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.130000114440918,
-            5.849999904632568,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 48,
-      "name": "RampSphere_29",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.099999904632568,
-            5.849999904632568,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 49,
-      "name": "RampSphere_30",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.119999885559082,
-            5.849999904632568,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 50,
-      "name": "RampSphere_31",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.639999866485596,
-            4.199999809265137,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 51,
-      "name": "RampSphere_32",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.610000133514404,
-            4.199999809265137,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 52,
-      "name": "RampSphere_33",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.630000114440918,
-            4.199999809265137,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 53,
-      "name": "RampSphere_34",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.599999904632568,
-            4.199999809265137,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 54,
-      "name": "RampSphere_35",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.619999885559082,
-            4.75,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 55,
-      "name": "RampSphere_36",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.639999866485596,
-            4.75,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 56,
-      "name": "RampSphere_37",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.610000133514404,
-            4.75,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 57,
-      "name": "RampSphere_38",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.630000114440918,
-            4.75,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 58,
-      "name": "RampSphere_39",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.599999904632568,
-            5.299999713897705,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 59,
-      "name": "RampSphere_40",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.619999885559082,
-            5.299999713897705,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 60,
-      "name": "RampSphere_41",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.639999866485596,
-            5.299999713897705,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 61,
-      "name": "RampSphere_42",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.610000133514404,
-            5.299999713897705,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 62,
-      "name": "RampSphere_43",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.630000114440918,
-            5.849999904632568,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 63,
-      "name": "RampSphere_44",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.599999904632568,
-            5.849999904632568,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 64,
-      "name": "RampSphere_45",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.619999885559082,
-            5.849999904632568,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 65,
-      "name": "RampSphere_46",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            6.639999866485596,
-            5.849999904632568,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 66,
-      "name": "RampSphere_47",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.110000133514404,
-            4.199999809265137,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 67,
-      "name": "RampSphere_48",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.130000114440918,
-            4.199999809265137,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 68,
-      "name": "RampSphere_49",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.099999904632568,
-            4.199999809265137,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 69,
-      "name": "RampSphere_50",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.119999885559082,
-            4.199999809265137,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 70,
-      "name": "RampSphere_51",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.139999866485596,
-            4.75,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 71,
-      "name": "RampSphere_52",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.110000133514404,
-            4.75,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 72,
-      "name": "RampSphere_53",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.130000114440918,
-            4.75,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 73,
-      "name": "RampSphere_54",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.099999904632568,
-            4.75,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 74,
-      "name": "RampSphere_55",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.119999885559082,
-            5.299999713897705,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 75,
-      "name": "RampSphere_56",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.139999866485596,
-            5.299999713897705,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 76,
-      "name": "RampSphere_57",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.110000133514404,
-            5.299999713897705,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 77,
-      "name": "RampSphere_58",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.130000114440918,
-            5.299999713897705,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 78,
-      "name": "RampSphere_59",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.099999904632568,
-            5.849999904632568,
-            6.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 79,
-      "name": "RampSphere_60",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.119999885559082,
-            5.849999904632568,
-            7.400000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 80,
-      "name": "RampSphere_61",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.139999866485596,
-            5.849999904632568,
-            7.900000095367432
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 81,
-      "name": "RampSphere_62",
-      "parentId": 0
-    },
-    {
-      "components": [
-        {
-          "position": [
-            7.110000133514404,
-            5.849999904632568,
-            8.399999618530273
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "scale": [
-            0.4000000059604645,
-            0.4000000059604645,
-            0.4000000059604645
-          ],
-          "type": "TransformComponent"
-        },
-        {
-          "blendMode": 0,
-          "castShadow": true,
-          "doubleSided": false,
-          "materialPath": "Resource/Materials/default.mat.json",
-          "meshPath": "Resource/Meshes/cube.obj",
-          "opacity": 1.0,
-          "type": "MeshComponent"
-        },
-        {
-          "channel": 1,
-          "halfExtents": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "halfHeight": 1.0,
-          "isTrigger": false,
-          "offset": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "radius": 0.20000000298023224,
-          "responses": [
-            2,
-            2,
-            2,
-            2,
-            2,
-            2
-          ],
-          "shape": 0,
-          "type": "ColliderComponent"
-        },
-        {
-          "angularDamping": 0.05000000074505806,
-          "friction": 0.4000000059604645,
-          "isKinematic": false,
-          "linearDamping": 0.05000000074505806,
-          "mass": 0.5,
-          "restitution": 0.20000000298023224,
-          "type": "RigidbodyComponent",
-          "useGravity": true
-        }
-      ],
-      "id": 82,
-      "name": "RampSphere_63",
+      "name": "StackBoxUpper",
       "parentId": 0
     },
     {
@@ -5431,7 +1206,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 83,
+      "id": 24,
       "name": "GridLight_0",
       "parentId": 0
     },
@@ -5470,7 +1245,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 84,
+      "id": 25,
       "name": "GridLight_1",
       "parentId": 0
     },
@@ -5509,7 +1284,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 85,
+      "id": 26,
       "name": "GridLight_2",
       "parentId": 0
     },
@@ -5548,7 +1323,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 86,
+      "id": 27,
       "name": "GridLight_3",
       "parentId": 0
     },
@@ -5587,7 +1362,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 87,
+      "id": 28,
       "name": "GridLight_4",
       "parentId": 0
     },
@@ -5626,7 +1401,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 88,
+      "id": 29,
       "name": "GridLight_5",
       "parentId": 0
     },
@@ -5665,7 +1440,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 89,
+      "id": 30,
       "name": "GridLight_6",
       "parentId": 0
     },
@@ -5704,7 +1479,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 90,
+      "id": 31,
       "name": "GridLight_7",
       "parentId": 0
     },
@@ -5743,7 +1518,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 91,
+      "id": 32,
       "name": "GridLight_8",
       "parentId": 0
     },
@@ -5782,7 +1557,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 92,
+      "id": 33,
       "name": "GridLight_9",
       "parentId": 0
     },
@@ -5821,7 +1596,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 93,
+      "id": 34,
       "name": "GridLight_10",
       "parentId": 0
     },
@@ -5860,7 +1635,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 94,
+      "id": 35,
       "name": "GridLight_11",
       "parentId": 0
     },
@@ -5899,7 +1674,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 95,
+      "id": 36,
       "name": "GridLight_12",
       "parentId": 0
     },
@@ -5938,7 +1713,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 96,
+      "id": 37,
       "name": "GridLight_13",
       "parentId": 0
     },
@@ -5977,7 +1752,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 97,
+      "id": 38,
       "name": "GridLight_14",
       "parentId": 0
     },
@@ -6016,7 +1791,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 98,
+      "id": 39,
       "name": "GridLight_15",
       "parentId": 0
     },
@@ -6055,7 +1830,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 99,
+      "id": 40,
       "name": "GridLight_16",
       "parentId": 0
     },
@@ -6094,7 +1869,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 100,
+      "id": 41,
       "name": "GridLight_17",
       "parentId": 0
     },
@@ -6133,7 +1908,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 101,
+      "id": 42,
       "name": "GridLight_18",
       "parentId": 0
     },
@@ -6172,7 +1947,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 102,
+      "id": 43,
       "name": "GridLight_19",
       "parentId": 0
     },
@@ -6211,7 +1986,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 103,
+      "id": 44,
       "name": "GridLight_20",
       "parentId": 0
     },
@@ -6250,7 +2025,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 104,
+      "id": 45,
       "name": "GridLight_21",
       "parentId": 0
     },
@@ -6289,7 +2064,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 105,
+      "id": 46,
       "name": "GridLight_22",
       "parentId": 0
     },
@@ -6328,7 +2103,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 106,
+      "id": 47,
       "name": "GridLight_23",
       "parentId": 0
     },
@@ -6367,7 +2142,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 107,
+      "id": 48,
       "name": "GridLight_24",
       "parentId": 0
     },
@@ -6406,7 +2181,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 108,
+      "id": 49,
       "name": "GridLight_25",
       "parentId": 0
     },
@@ -6445,7 +2220,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 109,
+      "id": 50,
       "name": "GridLight_26",
       "parentId": 0
     },
@@ -6484,7 +2259,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 110,
+      "id": 51,
       "name": "GridLight_27",
       "parentId": 0
     },
@@ -6523,7 +2298,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 111,
+      "id": 52,
       "name": "GridLight_28",
       "parentId": 0
     },
@@ -6562,7 +2337,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 112,
+      "id": 53,
       "name": "GridLight_29",
       "parentId": 0
     },
@@ -6601,7 +2376,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 113,
+      "id": 54,
       "name": "GridLight_30",
       "parentId": 0
     },
@@ -6640,7 +2415,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 114,
+      "id": 55,
       "name": "GridLight_31",
       "parentId": 0
     },
@@ -6679,7 +2454,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 115,
+      "id": 56,
       "name": "GridLight_32",
       "parentId": 0
     },
@@ -6718,7 +2493,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 116,
+      "id": 57,
       "name": "GridLight_33",
       "parentId": 0
     },
@@ -6757,7 +2532,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 117,
+      "id": 58,
       "name": "GridLight_34",
       "parentId": 0
     },
@@ -6796,7 +2571,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 118,
+      "id": 59,
       "name": "GridLight_35",
       "parentId": 0
     },
@@ -6835,7 +2610,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 119,
+      "id": 60,
       "name": "GridLight_36",
       "parentId": 0
     },
@@ -6874,7 +2649,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 120,
+      "id": 61,
       "name": "GridLight_37",
       "parentId": 0
     },
@@ -6913,7 +2688,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 121,
+      "id": 62,
       "name": "GridLight_38",
       "parentId": 0
     },
@@ -6952,7 +2727,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 122,
+      "id": 63,
       "name": "GridLight_39",
       "parentId": 0
     },
@@ -6991,7 +2766,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 123,
+      "id": 64,
       "name": "GridLight_40",
       "parentId": 0
     },
@@ -7030,7 +2805,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 124,
+      "id": 65,
       "name": "GridLight_41",
       "parentId": 0
     },
@@ -7069,7 +2844,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 125,
+      "id": 66,
       "name": "GridLight_42",
       "parentId": 0
     },
@@ -7108,7 +2883,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 126,
+      "id": 67,
       "name": "GridLight_43",
       "parentId": 0
     },
@@ -7147,7 +2922,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 127,
+      "id": 68,
       "name": "GridLight_44",
       "parentId": 0
     },
@@ -7186,7 +2961,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 128,
+      "id": 69,
       "name": "GridLight_45",
       "parentId": 0
     },
@@ -7225,7 +3000,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 129,
+      "id": 70,
       "name": "GridLight_46",
       "parentId": 0
     },
@@ -7264,7 +3039,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 130,
+      "id": 71,
       "name": "GridLight_47",
       "parentId": 0
     },
@@ -7303,7 +3078,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 131,
+      "id": 72,
       "name": "GridLight_48",
       "parentId": 0
     },
@@ -7342,7 +3117,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 132,
+      "id": 73,
       "name": "GridLight_49",
       "parentId": 0
     },
@@ -7381,7 +3156,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 133,
+      "id": 74,
       "name": "GridLight_50",
       "parentId": 0
     },
@@ -7420,7 +3195,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 134,
+      "id": 75,
       "name": "GridLight_51",
       "parentId": 0
     },
@@ -7459,7 +3234,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 135,
+      "id": 76,
       "name": "GridLight_52",
       "parentId": 0
     },
@@ -7498,7 +3273,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 136,
+      "id": 77,
       "name": "GridLight_53",
       "parentId": 0
     },
@@ -7537,7 +3312,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 137,
+      "id": 78,
       "name": "GridLight_54",
       "parentId": 0
     },
@@ -7576,7 +3351,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 138,
+      "id": 79,
       "name": "GridLight_55",
       "parentId": 0
     },
@@ -7615,7 +3390,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 139,
+      "id": 80,
       "name": "GridLight_56",
       "parentId": 0
     },
@@ -7654,7 +3429,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 140,
+      "id": 81,
       "name": "GridLight_57",
       "parentId": 0
     },
@@ -7693,7 +3468,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 141,
+      "id": 82,
       "name": "GridLight_58",
       "parentId": 0
     },
@@ -7732,7 +3507,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 142,
+      "id": 83,
       "name": "GridLight_59",
       "parentId": 0
     },
@@ -7771,7 +3546,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 143,
+      "id": 84,
       "name": "GridLight_60",
       "parentId": 0
     },
@@ -7810,7 +3585,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 144,
+      "id": 85,
       "name": "GridLight_61",
       "parentId": 0
     },
@@ -7849,7 +3624,7 @@
           "type": "LightComponent"
         }
       ],
-      "id": 145,
+      "id": 86,
       "name": "GridLight_62",
       "parentId": 0
     },
@@ -7888,11 +3663,11 @@
           "type": "LightComponent"
         }
       ],
-      "id": 146,
+      "id": 87,
       "name": "GridLight_63",
       "parentId": 0
     }
   ],
-  "nextId": 147,
+  "nextId": 88,
   "version": 1
 }

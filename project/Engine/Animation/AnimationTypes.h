@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Math/Math.h"
+#include "Engine/Math/Transform.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -14,6 +15,8 @@ struct Joint {
     int32_t     ParentIndex    = -1;
     Matrix4x4   InverseBindPose;    // mesh-space → joint-space (aiMesh::mBones[i].mOffsetMatrix)
     Matrix4x4   BindPoseLocal;      // rest-pose local transform (aiNode::mTransformation)
+    Transform   BindLocal;          // BindPoseLocal decomposed to TRS (rest pose for joints a clip
+                                    // doesn't animate; the neutral pose blends/state-machine fall back to)
 };
 
 struct Skeleton {
