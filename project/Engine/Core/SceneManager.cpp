@@ -13,7 +13,13 @@ void SceneManager::UpdateWorldTransforms() {
     }
 }
 
-void SceneManager::BeginPlay() { TickPass([](Component* c) { c->BeginPlay(); }); }
+void SceneManager::BeginPlay() {
+    TickPass([](Component* c) { c->BeginPlay(); });
+    // After every pawn is initialized, let the GameMode spawn a controller and possess the default
+    // pawn. Runs outside the tick pass (m_ticking is false), so CreateActor takes effect immediately;
+    // the spawned controller begins ticking next frame.
+    m_gameMode.BeginPlay(*this);
+}
 
 void SceneManager::Update(float dt) {
     // Fire due timers first (PrePhysics), so a timer set last frame runs before this frame's logic;
@@ -24,6 +30,7 @@ void SceneManager::Update(float dt) {
 
 void SceneManager::EndPlay() {
     TickPass([](Component* c) { c->EndPlay(); });
+    m_gameMode.EndPlay(*this);   // unpossess + destroy the controller GameMode spawned this Play
     m_timers.ClearAllTimers();   // don't let a stopped Play's timers bleed into the next Play
 }
 

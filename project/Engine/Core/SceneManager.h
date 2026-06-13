@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "Actor.h"
 #include "TimerManager.h"
+#include "GameMode.h"
 
 namespace Fujin {
 
@@ -47,6 +48,12 @@ public:
     // Reach it from gameplay via GetOwner()->GetScene()->GetTimerManager().
     TimerManager&       GetTimerManager()       { return m_timers; }
     const TimerManager& GetTimerManager() const { return m_timers; }
+
+    // This world's authoritative GameMode (UE5 GetWorld()->GetAuthGameMode() analog). Runs at
+    // BeginPlay to spawn a PlayerController and possess the default pawn; tears it down at EndPlay.
+    // Configure from main.cpp (e.g. AutoPossess). Not serialized — like the TimerManager.
+    GameMode&       GetAuthGameMode()       { return m_gameMode; }
+    const GameMode& GetAuthGameMode() const { return m_gameMode; }
 
     // The physics world backing this scene (set by main.cpp; not owned). Gameplay reaches spatial
     // queries through it — e.g. CharacterMovementComponent ray-casts for the ground to step up / climb
@@ -97,6 +104,7 @@ private:
 
     TimerManager  m_timers;          // world timer manager, ticked in Update, cleared on EndPlay/Clear
     PhysicsWorld* m_physics = nullptr; // backing physics world for spatial queries (not owned)
+    GameMode      m_gameMode;         // auth GameMode: spawns/possesses on BeginPlay, tears down on EndPlay
 };
 
 } // namespace Fujin

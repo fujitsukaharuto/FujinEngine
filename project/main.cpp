@@ -16,6 +16,8 @@
 #include "Engine/Core/RigidbodyComponent.h"
 #include "Engine/Core/RotatorComponent.h"
 #include "Engine/Core/CharacterMovementComponent.h"
+#include "Engine/Core/PawnComponent.h"
+#include "Engine/Core/PlayerControllerComponent.h"
 #include "Engine/Core/FootIKComponent.h"
 #include "Engine/Core/TimerDemoComponent.h"
 #include "Engine/Input/Input.h"
@@ -141,6 +143,14 @@ static void SetupTestScene() {
 
         auto* foxMove = fox->AddComponent<Fujin::CharacterMovementComponent>();
         foxMove->MaxSpeed = 4.0f;   // Sprint (Shift) → Run threshold; plain WASD walks at WalkSpeed
+
+        // Make the Fox a possessable Pawn (UE5 framework layer). At BeginPlay the auth GameMode spawns
+        // a PlayerController and possesses this pawn (AutoPossessPlayer), so the controller reads input
+        // and feeds the pawn, and CharacterMovementComponent consumes the pawn's input instead of
+        // reading Input directly — controller → pawn → movement. Remove this to fall back to the
+        // pawn-less path (movement reads Input itself), which behaves identically.
+        auto* foxPawn = fox->AddComponent<Fujin::PawnComponent>();
+        foxPawn->AutoPossessPlayer = true;
 
         // Foot IK: plant the Fox's 4 paws on the ground (steps/slopes). Quadruped chains are
         // upper→lower→paw; the front "arms" and rear "legs" of the glTF Fox skeleton.

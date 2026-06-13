@@ -433,6 +433,10 @@
           "yawOffset": 0.0
         },
         {
+          "autoPossessPlayer": true,
+          "type": "PawnComponent"
+        },
+        {
           "alignToNormal": true,
           "bodyTilt": true,
           "bodyTiltPitch": 0.699999988079071,

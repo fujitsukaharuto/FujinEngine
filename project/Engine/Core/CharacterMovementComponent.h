@@ -5,6 +5,7 @@
 #include "SceneManager.h"
 #include "TransformComponent.h"
 #include "AnimationComponent.h"
+#include "PawnComponent.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Physics/PhysicsWorld.h"
 #include "Engine/Math/Math.h"
@@ -77,17 +78,28 @@ public:
         if (!tc) return;
         Input& in = Input::Get();
 
-        // Desired horizontal direction from the named axes (WASD / left stick), world XZ.
-        float fwd   = in.GetAxis("MoveForward");
-        float right = in.GetAxis("MoveRight");
-        Vector3 dir(right, 0.0f, fwd);
+        // Movement intent comes from the possessing controller via a PawnComponent (UE5 controller →
+        // pawn → movement). When there is no possessed pawn we fall back to reading Input directly,
+        // preserving the pre-framework behaviour exactly (zero regression for pawn-less actors).
+        Vector3 dir;
+        bool sprintHeld, jumpPressed;
+        if (PawnComponent* pawn = GetOwner()->GetComponent<PawnComponent>(); pawn && pawn->IsPossessed()) {
+            dir         = pawn->GetMovementInput();   // world XZ, already clamped to unit length
+            sprintHeld  = pawn->WantsSprint();
+            jumpPressed = pawn->WantsJump();
+        } else {
+            dir         = Vector3(in.GetAxis("MoveRight"), 0.0f, in.GetAxis("MoveForward"));
+            sprintHeld  = in.ActionHeld("Sprint");
+            jumpPressed = in.ActionPressed("Jump");
+        }
+
         float inputMag = dir.Length();
         if (inputMag > 1.0f) { dir = dir * (1.0f / inputMag); inputMag = 1.0f; }
         else if (inputMag > 1e-3f) { dir = dir * (1.0f / inputMag); }
 
-        // Hold "Sprint" (Shift) to run; otherwise WASD walks. The target speed picks Walk vs Run so the
+        // Hold "Sprint" (Shift) to run; otherwise walk. The target speed picks Walk vs Run so the
         // blend space lands on the matching clip (WalkSpeed = Walk sample, MaxSpeed = Run sample).
-        const float topSpeed = in.ActionHeld("Sprint") ? MaxSpeed : WalkSpeed;
+        const float topSpeed = sprintHeld ? MaxSpeed : WalkSpeed;
         // Accelerate / decelerate the scalar speed toward the input-scaled target.
         float target = inputMag * topSpeed;
         if (m_speed < target) m_speed = (std::min)(target, m_speed + Acceleration * dt);
@@ -125,7 +137,7 @@ public:
         }
 
         const float delta = groundY - m_footY;   // + ground above feet (step up), - below (descend/air)
-        if (in.ActionPressed("Jump") && m_vy <= 0.0f && delta <= MaxStepHeight && delta >= -MaxStepHeight)
+        if (jumpPressed && m_vy <= 0.0f && delta <= MaxStepHeight && delta >= -MaxStepHeight)
             m_vy = JumpVelocity;                  // jump from a grounded stance
 
         bool airborne = false;

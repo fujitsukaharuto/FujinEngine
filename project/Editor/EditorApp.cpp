@@ -447,6 +447,17 @@ void EditorApp::BeginFrame(float dt) {
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
         m_cmdHistory.Redo();
 
+    // The selected actor may have been destroyed since last frame — a gameplay actor despawned
+    // during Play, or the GameMode's spawned PlayerController torn down on Stop. m_selected is a raw
+    // pointer, so clear a stale selection (by scanning the live actor list, never dereferencing the
+    // dangling pointer) before any panel reads it — the same guard m_effectEditActor uses below.
+    if (Actor* sel = m_hierarchyPanel.GetSelectedActor()) {
+        bool alive = false;
+        for (auto& a : m_scene->GetActors())
+            if (a.get() == sel) { alive = true; break; }
+        if (!alive) m_hierarchyPanel.SetSelectedActor(nullptr);
+    }
+
     DrawToolbar();
     DrawFPSOverlay();
     if (!m_effectEditOpen)
