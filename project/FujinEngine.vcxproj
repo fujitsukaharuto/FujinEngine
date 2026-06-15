@@ -155,6 +155,7 @@
   <ItemGroup>
     <ClInclude Include="Engine\Core\Win32Window.h" />
     <ClInclude Include="Engine\Core\Component.h" />
+    <ClInclude Include="Engine\Core\JsonVisitor.h" />
     <ClInclude Include="Engine\Core\Actor.h" />
     <ClInclude Include="Engine\Core\TransformComponent.h" />
     <ClInclude Include="Engine\Core\MeshComponent.h" />
@@ -171,6 +172,7 @@
     <ClInclude Include="Engine\Core\FootIKComponent.h" />
     <ClInclude Include="Engine\Core\PawnComponent.h" />
     <ClInclude Include="Engine\Core\PlayerControllerComponent.h" />
+    <ClInclude Include="Engine\Core\PlayerStartComponent.h" />
     <ClInclude Include="Engine\Core\GameMode.h" />
     <ClInclude Include="Engine\Asset\SceneSerializer.h" />
     <ClInclude Include="Engine\Asset\SaveSystem.h" />

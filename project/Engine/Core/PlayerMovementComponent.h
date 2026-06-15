@@ -20,18 +20,11 @@ public:
     float Gravity      = -12.0f;  // downward acceleration
 
     const char* GetTypeName() const override { return "PlayerMovementComponent"; }
-    void ToJson(nlohmann::json& j) const override {
-        j["moveSpeed"] = MoveSpeed; j["jumpVelocity"] = JumpVelocity; j["gravity"] = Gravity;
-    }
-    void FromJson(const nlohmann::json& j) override {
-        MoveSpeed    = j.value("moveSpeed",    MoveSpeed);
-        JumpVelocity = j.value("jumpVelocity", JumpVelocity);
-        Gravity      = j.value("gravity",      Gravity);
-    }
+    // Reflect is the single source of truth (Inspector + default ToJson/FromJson).
     void Reflect(IPropertyVisitor& v) override {
-        v.Float("Move Speed",    &MoveSpeed,    0.1f, 0.0f, 50.0f);
-        v.Float("Jump Velocity", &JumpVelocity, 0.1f, 0.0f, 50.0f);
-        v.Float("Gravity",       &Gravity,      0.1f, -50.0f, 0.0f);
+        v.Float("moveSpeed",    "Move Speed",    &MoveSpeed,    0.1f, 0.0f, 50.0f);
+        v.Float("jumpVelocity", "Jump Velocity", &JumpVelocity, 0.1f, 0.0f, 50.0f);
+        v.Float("gravity",      "Gravity",       &Gravity,      0.1f, -50.0f, 0.0f);
     }
 
     void BeginPlay() override {

@@ -95,24 +95,28 @@ public:
         LockHeight      = j.value("lockHeight",      LockHeight);
         LockSmoothness  = j.value("lockSmoothness",  LockSmoothness);
     }
+    // NOTE: FootIK keeps its own ToJson/FromJson (above) rather than relying on the Reflect-driven
+    // default, because it serializes PelvisBone (intentionally not exposed in the Inspector, so not
+    // reflected) and migrates the legacy `bodyTiltWeight` key. Reflect still uses the same keys as
+    // ToJson so the two stay in sync for the fields they share.
     void Reflect(IPropertyVisitor& v) override {
-        v.Bool ("Enabled",         &Enabled);
-        v.Float("Trace Up",        &TraceUp,    0.05f,  0.0f, 5.0f);
-        v.Float("Trace Down",      &TraceDown,  0.05f,  0.0f, 5.0f);
-        v.Float("Foot Offset",     &FootOffset, 0.01f, -1.0f, 1.0f);
-        v.Float("Max Raise",       &MaxRaise,   0.05f,  0.0f, 5.0f);
-        v.Float("Weight",          &Weight,     0.05f,  0.0f, 1.0f);
-        v.Float("Foot Smooth",     &FootSmoothness, 0.5f, 0.0f, 60.0f);
-        v.Bool ("Align To Normal", &AlignToNormal);
-        v.Float("Max Pelvis Drop", &MaxPelvisDrop,    0.01f, 0.0f, 2.0f);
-        v.Float("Pelvis Smooth",   &PelvisSmoothness, 0.5f,  0.0f, 60.0f);
-        v.Bool ("Body Tilt",        &BodyTilt);
-        v.Float("Body Tilt Pitch",  &BodyTiltPitch,      0.05f, 0.0f, 1.0f);
-        v.Float("Body Tilt Roll",   &BodyTiltRoll,       0.05f, 0.0f, 1.0f);
-        v.Float("Body Tilt Smooth", &BodyTiltSmoothness, 0.5f,  0.0f, 60.0f);
-        v.Bool ("Foot Lock",        &FootLock);
-        v.Float("Lock Height",      &LockHeight,     0.01f, 0.0f, 2.0f);
-        v.Float("Lock Smooth",      &LockSmoothness, 0.5f,  0.0f, 60.0f);
+        v.Bool ("enabled",        "Enabled",         &Enabled);
+        v.Float("traceUp",        "Trace Up",        &TraceUp,    0.05f,  0.0f, 5.0f);
+        v.Float("traceDown",      "Trace Down",      &TraceDown,  0.05f,  0.0f, 5.0f);
+        v.Float("footOffset",     "Foot Offset",     &FootOffset, 0.01f, -1.0f, 1.0f);
+        v.Float("maxRaise",       "Max Raise",       &MaxRaise,   0.05f,  0.0f, 5.0f);
+        v.Float("weight",         "Weight",          &Weight,     0.05f,  0.0f, 1.0f);
+        v.Float("footSmoothness", "Foot Smooth",     &FootSmoothness, 0.5f, 0.0f, 60.0f);
+        v.Bool ("alignToNormal",  "Align To Normal", &AlignToNormal);
+        v.Float("maxPelvisDrop",  "Max Pelvis Drop", &MaxPelvisDrop,    0.01f, 0.0f, 2.0f);
+        v.Float("pelvisSmoothness", "Pelvis Smooth", &PelvisSmoothness, 0.5f,  0.0f, 60.0f);
+        v.Bool ("bodyTilt",          "Body Tilt",        &BodyTilt);
+        v.Float("bodyTiltPitch",     "Body Tilt Pitch",  &BodyTiltPitch,      0.05f, 0.0f, 1.0f);
+        v.Float("bodyTiltRoll",      "Body Tilt Roll",   &BodyTiltRoll,       0.05f, 0.0f, 1.0f);
+        v.Float("bodyTiltSmoothness", "Body Tilt Smooth", &BodyTiltSmoothness, 0.5f,  0.0f, 60.0f);
+        v.Bool ("footLock",       "Foot Lock",       &FootLock);
+        v.Float("lockHeight",     "Lock Height",     &LockHeight,     0.01f, 0.0f, 2.0f);
+        v.Float("lockSmoothness", "Lock Smooth",     &LockSmoothness, 0.5f,  0.0f, 60.0f);
     }
 };
 

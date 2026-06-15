@@ -49,7 +49,26 @@ public:
     std::array<Matrix4x4, MAX_BONES> PrevBonePalette;   // last frame's palette (skeletal motion vectors)
     bool        PaletteReady = false;
 
-    AnimationComponent() { BonePalette.fill(Matrix4x4::Identity); PrevBonePalette.fill(Matrix4x4::Identity); }
+    // ── Bone sockets (UE5-style attach-to-bone). Filled each frame at pose finalize so a child actor
+    // can attach to a named bone via TransformComponent::AttachSocket. Runtime only (not serialized). ──
+    std::array<Matrix4x4, MAX_BONES> BoneModelGlobals;          // mesh-space posed bone globals (pre inverse-bind)
+    std::unordered_map<std::string, uint32_t> BoneNameToIndex;  // copied once from the skeleton's JointMap
+    bool        SocketsReady = false;
+
+    // Mesh-space transform of a named bone (socket): true iff the pose is built and the bone exists.
+    bool TryGetSocketModelTransform(const std::string& bone, Matrix4x4& out) const {
+        if (!SocketsReady) return false;
+        auto it = BoneNameToIndex.find(bone);
+        if (it == BoneNameToIndex.end() || it->second >= MAX_BONES) return false;
+        out = BoneModelGlobals[it->second];
+        return true;
+    }
+
+    AnimationComponent() {
+        BonePalette.fill(Matrix4x4::Identity);
+        PrevBonePalette.fill(Matrix4x4::Identity);
+        BoneModelGlobals.fill(Matrix4x4::Identity);
+    }
 
     const char* GetTypeName() const override { return "AnimationComponent"; }
     void ToJson(nlohmann::json& j)        const override;

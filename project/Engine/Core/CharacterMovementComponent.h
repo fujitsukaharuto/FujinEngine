@@ -33,34 +33,18 @@ public:
     float StepSmoothness = 12.0f; // how fast the visual height eases to a new step (1/s); 0 = instant snap
 
     const char* GetTypeName() const override { return "CharacterMovementComponent"; }
-    void ToJson(nlohmann::json& j) const override {
-        j["walkSpeed"]    = WalkSpeed;    j["maxSpeed"]     = MaxSpeed;
-        j["acceleration"] = Acceleration; j["turnRate"]     = TurnRate;
-        j["yawOffset"]    = YawOffset;    j["gravity"]      = Gravity;
-        j["jumpVelocity"] = JumpVelocity; j["maxStepHeight"]  = MaxStepHeight;
-        j["stepSmoothness"] = StepSmoothness;
-    }
-    void FromJson(const nlohmann::json& j) override {
-        WalkSpeed      = j.value("walkSpeed",      WalkSpeed);
-        MaxSpeed       = j.value("maxSpeed",       MaxSpeed);
-        Acceleration   = j.value("acceleration",   Acceleration);
-        TurnRate       = j.value("turnRate",       TurnRate);
-        YawOffset      = j.value("yawOffset",      YawOffset);
-        Gravity        = j.value("gravity",        Gravity);
-        JumpVelocity   = j.value("jumpVelocity",   JumpVelocity);
-        MaxStepHeight  = j.value("maxStepHeight",  MaxStepHeight);
-        StepSmoothness = j.value("stepSmoothness", StepSmoothness);
-    }
+    // Reflect declares every field once (key + label); Component's default ToJson/FromJson drive
+    // save/load from it. JSON keys are kept verbatim so existing scenes/saves stay compatible.
     void Reflect(IPropertyVisitor& v) override {
-        v.Float("Walk Speed",    &WalkSpeed,    0.1f,  0.0f,  50.0f);
-        v.Float("Run Speed",     &MaxSpeed,     0.1f,  0.0f,  50.0f);
-        v.Float("Acceleration",  &Acceleration, 0.5f,  0.0f, 200.0f);
-        v.Float("Turn Rate",     &TurnRate,     0.5f,  0.0f,  60.0f);
-        v.Float("Yaw Offset",    &YawOffset,    1.0f, -180.0f, 180.0f);
-        v.Float("Gravity",        &Gravity,       0.1f, -50.0f,  0.0f);
-        v.Float("Jump Velocity",  &JumpVelocity,  0.1f,  0.0f,  50.0f);
-        v.Float("Max Step Height", &MaxStepHeight,  0.05f, 0.0f,  5.0f);
-        v.Float("Step Smoothness", &StepSmoothness, 0.5f,  0.0f, 60.0f);
+        v.Float("walkSpeed",      "Walk Speed",      &WalkSpeed,    0.1f,  0.0f,  50.0f);
+        v.Float("maxSpeed",       "Run Speed",       &MaxSpeed,     0.1f,  0.0f,  50.0f);
+        v.Float("acceleration",   "Acceleration",    &Acceleration, 0.5f,  0.0f, 200.0f);
+        v.Float("turnRate",       "Turn Rate",       &TurnRate,     0.5f,  0.0f,  60.0f);
+        v.Float("yawOffset",      "Yaw Offset",      &YawOffset,    1.0f, -180.0f, 180.0f);
+        v.Float("gravity",        "Gravity",         &Gravity,       0.1f, -50.0f,  0.0f);
+        v.Float("jumpVelocity",   "Jump Velocity",   &JumpVelocity,  0.1f,  0.0f,  50.0f);
+        v.Float("maxStepHeight",  "Max Step Height", &MaxStepHeight,  0.05f, 0.0f,  5.0f);
+        v.Float("stepSmoothness", "Step Smoothness", &StepSmoothness, 0.5f,  0.0f, 60.0f);
     }
 
     void BeginPlay() override {

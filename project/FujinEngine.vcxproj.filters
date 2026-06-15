@@ -335,6 +335,9 @@
     <ClInclude Include="Engine\Core\Component.h">
       <Filter>Engine\Core</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\JsonVisitor.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Core\Actor.h">
       <Filter>Engine\Core</Filter>
     </ClInclude>
@@ -381,6 +384,9 @@
       <Filter>Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\PlayerControllerComponent.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\PlayerStartComponent.h">
       <Filter>Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\GameMode.h">

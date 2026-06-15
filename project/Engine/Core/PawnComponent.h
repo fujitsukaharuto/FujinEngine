@@ -27,12 +27,9 @@ public:
     bool AutoPossessPlayer = false;
 
     const char* GetTypeName() const override { return "PawnComponent"; }
-    void ToJson(nlohmann::json& j) const override { j["autoPossessPlayer"] = AutoPossessPlayer; }
-    void FromJson(const nlohmann::json& j) override {
-        AutoPossessPlayer = j.value("autoPossessPlayer", AutoPossessPlayer);
-    }
+    // Reflect is the single source of truth (drives Inspector + default ToJson/FromJson).
     void Reflect(IPropertyVisitor& v) override {
-        v.Bool("Auto Possess Player", &AutoPossessPlayer);
+        v.Bool("autoPossessPlayer", "Auto Possess Player", &AutoPossessPlayer);
     }
 
     // ── Possession (controller ⇄ pawn, by actor id to stay dangle-safe) ──────────────────────────

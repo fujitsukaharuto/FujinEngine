@@ -568,8 +568,11 @@ void SampleClipPose(const AnimationClip& clip, const Skeleton& skel, float t,
 
 // Build the GPU bone palette from per-joint local poses: accumulate the world hierarchy (parent ×
 // local, matching the established M·v / world = parent*local convention) then × inverse bind pose.
+// outGlobals (optional) receives each bone's MESH-SPACE posed global (globalTx, before the inverse
+// bind) — the source for bone sockets: a socket's world = actorWorld * outGlobals[boneIdx] * offset.
 void BuildPaletteFromPose(const Skeleton& skel, const std::vector<Transform>& pose,
-                          std::array<Matrix4x4, MAX_BONES>& outPalette) {
+                          std::array<Matrix4x4, MAX_BONES>& outPalette,
+                          std::array<Matrix4x4, MAX_BONES>* outGlobals = nullptr) {
     const uint32_t n = static_cast<uint32_t>(skel.Joints.size());
     std::vector<Matrix4x4> globalTx(n);
     for (uint32_t ji = 0; ji < n; ++ji) {
@@ -582,6 +585,10 @@ void BuildPaletteFromPose(const Skeleton& skel, const std::vector<Transform>& po
         outPalette[ji] = globalTx[ji] * skel.Joints[ji].InverseBindPose;
     for (uint32_t ji = cnt; ji < MAX_BONES; ++ji)
         outPalette[ji] = Matrix4x4::Identity;
+    if (outGlobals) {
+        for (uint32_t ji = 0; ji < cnt; ++ji) (*outGlobals)[ji] = globalTx[ji];
+        for (uint32_t ji = cnt; ji < MAX_BONES; ++ji) (*outGlobals)[ji] = Matrix4x4::Identity;
+    }
 }
 
 // Critically-damped smoothing (Unity's SmoothDamp): eases `current` toward `target` while tracking a
@@ -908,7 +915,17 @@ void FinalizePose(Actor* actor, const Skeleton& skel, std::vector<Transform>& po
                   std::array<Matrix4x4, MAX_BONES>& outPalette, float dt) {
     if (auto* ik = actor->GetComponent<FootIKComponent>())
         if (ik->Enabled) ApplyFootIK(actor, skel, pose, *ik, dt);
-    BuildPaletteFromPose(skel, pose, outPalette);
+
+    // Also cache the mesh-space bone globals on the AnimationComponent so child actors can attach to
+    // a named bone socket (TransformComponent::GetWorldTransform reads these). The name→index map is
+    // copied once (the skeleton is stable). Sockets resolve with a one-frame lag (this runs at render
+    // time, after the update-phase UpdateWorldTransforms) — imperceptible for attachment.
+    auto* anim = actor->GetComponent<AnimationComponent>();
+    BuildPaletteFromPose(skel, pose, outPalette, anim ? &anim->BoneModelGlobals : nullptr);
+    if (anim && !anim->SocketsReady) {
+        anim->BoneNameToIndex = skel.JointMap;
+        anim->SocketsReady = true;
+    }
 }
 
 const AnimationClip* FindClip(const SkeletalMeshAsset& mesh, const std::string& name) {

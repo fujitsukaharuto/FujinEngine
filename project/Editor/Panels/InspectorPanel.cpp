@@ -445,26 +445,27 @@ namespace {
 // Counts how many properties a component exposes (so we only draw a header when there are any).
 struct CountVisitor : IPropertyVisitor {
     int count = 0;
-    void Float(const char*, float*, float, float, float) override { ++count; }
-    void Int  (const char*, int*, int, int)              override { ++count; }
-    void Bool (const char*, bool*)                       override { ++count; }
-    void Vec3 (const char*, Vector3*, float)             override { ++count; }
-    void Color(const char*, Vector3*)                    override { ++count; }
-    void Text (const char*, std::string*)                override { ++count; }
+    void Float(const char*, const char*, float*, float, float, float) override { ++count; }
+    void Int  (const char*, const char*, int*, int, int)              override { ++count; }
+    void Bool (const char*, const char*, bool*)                       override { ++count; }
+    void Vec3 (const char*, const char*, Vector3*, float)             override { ++count; }
+    void Color(const char*, const char*, Vector3*)                    override { ++count; }
+    void Text (const char*, const char*, std::string*)                override { ++count; }
 };
 
-// Renders each property with the matching ImGui widget. min>=max ⇒ unbounded drag.
+// Renders each property with the matching ImGui widget, labelled by `label` (the `key` — the JSON
+// serialization name — is unused here). min>=max ⇒ unbounded drag.
 struct ImGuiVisitor : IPropertyVisitor {
-    void Float(const char* n, float* v, float speed, float mn, float mx) override {
+    void Float(const char*, const char* n, float* v, float speed, float mn, float mx) override {
         ImGui::DragFloat(n, v, speed, mn, mx);
     }
-    void Int(const char* n, int* v, int mn, int mx) override {
+    void Int(const char*, const char* n, int* v, int mn, int mx) override {
         if (mn < mx) ImGui::SliderInt(n, v, mn, mx); else ImGui::DragInt(n, v);
     }
-    void Bool(const char* n, bool* v)            override { ImGui::Checkbox(n, v); }
-    void Vec3(const char* n, Vector3* v, float s) override { ImGui::DragFloat3(n, &v->x, s); }
-    void Color(const char* n, Vector3* v)        override { ImGui::ColorEdit3(n, &v->x); }
-    void Text(const char* n, std::string* v) override {
+    void Bool(const char*, const char* n, bool* v)            override { ImGui::Checkbox(n, v); }
+    void Vec3(const char*, const char* n, Vector3* v, float s) override { ImGui::DragFloat3(n, &v->x, s); }
+    void Color(const char*, const char* n, Vector3* v)        override { ImGui::ColorEdit3(n, &v->x); }
+    void Text(const char*, const char* n, std::string* v) override {
         char buf[256] = {};
         strncpy_s(buf, sizeof(buf), v->c_str(), _TRUNCATE);
         if (ImGui::InputText(n, buf, sizeof(buf))) *v = buf;

@@ -25,17 +25,10 @@ public:
     MulticastDelegate<int> OnPulse;
 
     const char* GetTypeName() const override { return "TimerDemoComponent"; }
-    void ToJson(nlohmann::json& j) const override {
-        j["interval"] = Interval;
-        j["popScale"] = PopScale;
-    }
-    void FromJson(const nlohmann::json& j) override {
-        Interval = j.value("interval", Interval);
-        PopScale = j.value("popScale", PopScale);
-    }
+    // Reflect is the single source of truth (Inspector + default ToJson/FromJson).
     void Reflect(IPropertyVisitor& v) override {
-        v.Float("Interval (s)", &Interval, 0.05f, 0.05f, 10.0f);
-        v.Float("Pop Scale",    &PopScale, 0.05f, 1.0f, 4.0f);
+        v.Float("interval", "Interval (s)", &Interval, 0.05f, 0.05f, 10.0f);
+        v.Float("popScale", "Pop Scale",    &PopScale, 0.05f, 1.0f, 4.0f);
     }
 
     void BeginPlay() override {

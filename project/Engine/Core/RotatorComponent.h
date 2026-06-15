@@ -17,14 +17,11 @@ public:
     float DegreesPerSecond = 90.0f;   // spin speed about local +Y
 
     const char* GetTypeName() const override { return "RotatorComponent"; }
-    void ToJson(nlohmann::json& j) const override { j["degreesPerSecond"] = DegreesPerSecond; }
-    void FromJson(const nlohmann::json& j) override {
-        DegreesPerSecond = j.value("degreesPerSecond", DegreesPerSecond);
-    }
 
-    // Exposes DegreesPerSecond to the editor's generic Inspector — no DrawXxx in InspectorPanel.
+    // Single source of truth: declaring DegreesPerSecond here drives both the Inspector and save/load
+    // (Component's default ToJson/FromJson route through Reflect) — no DrawXxx, no ToJson/FromJson.
     void Reflect(IPropertyVisitor& v) override {
-        v.Float("Degrees / Second", &DegreesPerSecond, 1.0f, -1440.0f, 1440.0f);
+        v.Float("degreesPerSecond", "Degrees / Second", &DegreesPerSecond, 1.0f, -1440.0f, 1440.0f);
     }
 
     void Update(float dt) override {

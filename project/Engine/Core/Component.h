@@ -14,8 +14,13 @@ class Component {
 public:
     virtual ~Component() = default;
     virtual const char* GetTypeName() const = 0;
-    virtual void ToJson(nlohmann::json& j) const = 0;
-    virtual void FromJson(const nlohmann::json& j) = 0;
+
+    // Save/load. The default implementations drive Reflect() through JsonWriteVisitor/JsonReadVisitor
+    // (so a component that declares its fields in Reflect() round-trips with no bespoke code). Override
+    // only when serialization needs to diverge from the reflected set — e.g. a serialized-but-hidden
+    // field or a legacy-key migration (see FootIKComponent).
+    virtual void ToJson(nlohmann::json& j) const;
+    virtual void FromJson(const nlohmann::json& j);
 
     // Gameplay lifecycle (UE5-style). Driven by SceneManager only while the editor is in Play:
     //   BeginPlay : once when Play starts.
