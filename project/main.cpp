@@ -416,7 +416,12 @@ static bool Init() {
         a.AddComponent<Fujin::PawnComponent>();
     };
 
-    SetupTestScene(); // always regenerate to apply latest scene changes
+    // Scene is now an asset (Resource/Scenes/test.scene.json): load it so in-editor edits / Duplicate
+    // / "Save Scene" persist across runs. SetupTestScene is only the first-run bootstrap (it also saves
+    // the file). Delete the .json to regenerate from code. The scene fully round-trips now — anim blend
+    // spaces / state machines and foot-IK leg chains serialize, so loading rebuilds them too.
+    if (!Fujin::SceneSerializer::Load(g_scene, "Resource/Scenes/test.scene.json"))
+        SetupTestScene();
 
     return true;
 }

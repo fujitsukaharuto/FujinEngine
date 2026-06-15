@@ -89,7 +89,7 @@ private:
 
     CommandHistory m_cmdHistory;
 
-    char       m_scenePath[260] = "Resources/Scenes/test.scene.json";
+    char       m_scenePath[260] = "Resource/Scenes/test.scene.json";   // matches the asset main.cpp loads
     ImGuiID    m_dockspaceId   = 0;
     uint32_t   m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0;
     bool       m_isPlaying        = false;

@@ -16,8 +16,8 @@ struct IKLeg { std::string Root, Mid, End; float Offset = 0.0f; };
 // Foot-placement IK (the engine's UE5 foot-IK analog). Driven in SceneRenderer right after the
 // animation pose is sampled: each leg's foot is ray-traced down to the ground and planted via
 // two-bone IK so the character's feet follow steps / slopes instead of floating or clipping. Feet
-// already above the ground (swing phase) are left untouched. Legs are populated in code (like a
-// blend space's samples — not serialized); the scalars below are tunable in the editor and saved.
+// already above the ground (swing phase) are left untouched. Legs are populated in code (e.g. in
+// SetupTestScene) but also round-trip through the scene asset; the scalars below are editor-tunable.
 class FootIKComponent : public Component {
 public:
     bool  Enabled    = true;
@@ -73,6 +73,12 @@ public:
         j["bodyTilt"] = BodyTilt; j["bodyTiltPitch"] = BodyTiltPitch; j["bodyTiltRoll"] = BodyTiltRoll;
         j["bodyTiltSmoothness"] = BodyTiltSmoothness;
         j["footLock"] = FootLock; j["lockHeight"] = LockHeight; j["lockSmoothness"] = LockSmoothness;
+        // Leg chains: pure config (bone names + offset), so they round-trip with the scene asset
+        // instead of living only in SetupTestScene code.
+        j["legs"] = nlohmann::json::array();
+        for (auto& leg : Legs)
+            j["legs"].push_back({ { "root", leg.Root }, { "mid", leg.Mid },
+                                  { "end", leg.End }, { "offset", leg.Offset } });
     }
     void FromJson(const nlohmann::json& j) override {
         Enabled         = j.value("enabled",         Enabled);
@@ -94,6 +100,17 @@ public:
         FootLock        = j.value("footLock",        FootLock);
         LockHeight      = j.value("lockHeight",      LockHeight);
         LockSmoothness  = j.value("lockSmoothness",  LockSmoothness);
+        if (j.contains("legs") && j["legs"].is_array()) {
+            Legs.clear();
+            for (auto& lj : j["legs"]) {
+                IKLeg leg;
+                leg.Root   = lj.value("root",   std::string());
+                leg.Mid    = lj.value("mid",    std::string());
+                leg.End    = lj.value("end",    std::string());
+                leg.Offset = lj.value("offset", 0.0f);
+                Legs.push_back(std::move(leg));
+            }
+        }
     }
     // NOTE: FootIK keeps its own ToJson/FromJson (above) rather than relying on the Reflect-driven
     // default, because it serializes PelvisBone (intentionally not exposed in the Inspector, so not

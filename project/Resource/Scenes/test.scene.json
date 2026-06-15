@@ -289,7 +289,9 @@
           "playing": true,
           "speed": 1.0,
           "timeOffset": 0.0,
-          "type": "AnimationComponent"
+          "type": "AnimationComponent",
+          "useBlendSpace": false,
+          "useStateMachine": false
         }
       ],
       "id": 7,
@@ -332,7 +334,9 @@
           "playing": true,
           "speed": 1.0,
           "timeOffset": 0.3499999940395355,
-          "type": "AnimationComponent"
+          "type": "AnimationComponent",
+          "useBlendSpace": false,
+          "useStateMachine": false
         }
       ],
       "id": 8,
@@ -375,7 +379,9 @@
           "playing": true,
           "speed": 1.0,
           "timeOffset": 0.699999988079071,
-          "type": "AnimationComponent"
+          "type": "AnimationComponent",
+          "useBlendSpace": false,
+          "useStateMachine": false
         }
       ],
       "id": 9,
@@ -413,12 +419,31 @@
           "type": "MeshComponent"
         },
         {
+          "blend": {
+            "param": "Speed",
+            "samples": [
+              {
+                "clip": "Survey",
+                "threshold": 0.0
+              },
+              {
+                "clip": "Walk",
+                "threshold": 1.5
+              },
+              {
+                "clip": "Run",
+                "threshold": 4.0
+              }
+            ]
+          },
           "clipName": "",
           "loop": true,
           "playing": true,
           "speed": 1.0,
           "timeOffset": 0.0,
-          "type": "AnimationComponent"
+          "type": "AnimationComponent",
+          "useBlendSpace": true,
+          "useStateMachine": false
         },
         {
           "acceleration": 16.0,
@@ -446,6 +471,32 @@
           "footLock": true,
           "footOffset": 0.0,
           "footSmoothness": 12.0,
+          "legs": [
+            {
+              "end": "b_RightHand_08",
+              "mid": "b_RightForeArm_07",
+              "offset": 0.0,
+              "root": "b_RightUpperArm_06"
+            },
+            {
+              "end": "b_LeftHand_011",
+              "mid": "b_LeftForeArm_010",
+              "offset": 0.0,
+              "root": "b_LeftUpperArm_09"
+            },
+            {
+              "end": "b_LeftFoot01_017",
+              "mid": "b_LeftLeg02_016",
+              "offset": 0.0,
+              "root": "b_LeftLeg01_015"
+            },
+            {
+              "end": "b_RightFoot01_021",
+              "mid": "b_RightLeg02_020",
+              "offset": 0.0,
+              "root": "b_RightLeg01_019"
+            }
+          ],
           "lockHeight": 0.07999999821186066,
           "lockSmoothness": 14.0,
           "maxPelvisDrop": 0.25,
@@ -534,7 +585,9 @@
           "playing": true,
           "speed": 1.0,
           "timeOffset": 0.0,
-          "type": "AnimationComponent"
+          "type": "AnimationComponent",
+          "useBlendSpace": false,
+          "useStateMachine": false
         },
         {
           "acceleration": 16.0,
@@ -562,6 +615,20 @@
           "footLock": true,
           "footOffset": 0.0,
           "footSmoothness": 12.0,
+          "legs": [
+            {
+              "end": "leg_joint_R_3",
+              "mid": "leg_joint_R_2",
+              "offset": 0.0,
+              "root": "leg_joint_R_1"
+            },
+            {
+              "end": "leg_joint_L_3",
+              "mid": "leg_joint_L_2",
+              "offset": 0.0,
+              "root": "leg_joint_L_1"
+            }
+          ],
           "lockHeight": 0.07999999821186066,
           "lockSmoothness": 14.0,
           "maxPelvisDrop": 0.25,
