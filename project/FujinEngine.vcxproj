@@ -55,7 +55,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <PreBuildEvent>
-      <Command>powershell -NonInteractive -ExecutionPolicy Bypass -File "$(ProjectDir)Tools\compile_shaders.ps1" -ProjectDir "$(ProjectDir)" -Configuration "$(Configuration)"</Command>
+      <Command>powershell -NonInteractive -ExecutionPolicy Bypass -File "$(ProjectDir)Tools\compile_shaders.ps1" -ProjectDir "$(ProjectDir.TrimEnd('\'))" -Configuration "$(Configuration)"</Command>
       <Message>Compiling HLSL shaders with DXC...</Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>

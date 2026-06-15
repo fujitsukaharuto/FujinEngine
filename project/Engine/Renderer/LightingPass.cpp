@@ -489,7 +489,8 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
                             float nearZ, float farZ,
                             uint32_t spotShadowSRVSlot,
                             uint32_t pointShadowSRVSlot,
-                            const ContactShadowSettings& contact) {
+                            const ContactShadowSettings& contact,
+                            const std::vector<ParticleLight>& particleLights) {
     uint32_t fi = frameIndex % NUM_FRAMES_IN_FLIGHT;
 
     // Camera CB layout:
@@ -561,6 +562,23 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
         memcpy(sb + (size_t)lightCount * GPU_LIGHT_STRIDE, &gl, GPU_LIGHT_STRIDE);
 
         cullItems.push_back({ worldPos, lc->Range, gl.type < 0.5f /* directional */ });
+        ++lightCount;
+    }
+
+    // Particle Light Renderer: inject per-particle dynamic point lights (CPU emitters only). These
+    // participate in cluster culling exactly like authored point lights, just without shadows.
+    for (const ParticleLight& pl : particleLights) {
+        if (lightCount >= MAX_LIGHTS) break;
+        GpuLight gl = {};
+        gl.pos[0] = pl.pos.x; gl.pos[1] = pl.pos.y; gl.pos[2] = pl.pos.z;
+        gl.type      = static_cast<float>(LightType::Point);
+        gl.range     = pl.range;
+        gl.color[0]  = pl.color.x; gl.color[1] = pl.color.y; gl.color[2] = pl.color.z;
+        gl.intensity = pl.intensity;
+        gl.spotAngle = 0.0f;
+        gl.shadowIndex = -1.0f;
+        memcpy(sb + (size_t)lightCount * GPU_LIGHT_STRIDE, &gl, GPU_LIGHT_STRIDE);
+        cullItems.push_back({ pl.pos, pl.range, false });
         ++lightCount;
     }
     memcpy(m_cameraMapped[fi] + 116, &lightCount, 4);   // LightCount lives in the Camera CB now

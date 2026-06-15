@@ -34,6 +34,9 @@ cbuffer UpdateParams : register(b0) {
     uint Collision; float Restitution; float Friction; float CollPush;  // row 12
     uint UseSizeCurve; float3 _sccpad;  // row 13
     float4 SizeCurve[2];                // rows 14-15 (8 floats, tightly packed)
+    uint UseVortex; float VortexStrength; float VortexInward; float VortexRadius;  // row 16
+    float3 VortexCenter; float _vcpad;  // row 17
+    float3 VortexAxis;   float _vapad;  // row 18
 };
 
 float SampleSizeCurve(float t) {
@@ -84,6 +87,23 @@ void main(uint3 id : SV_DispatchThreadID) {
         if (dist < AttractorRadius && dist > 0.0001) {
             float falloff = 1.0 - dist / AttractorRadius;
             p.vel += (diff / dist) * AttractorStrength * falloff * DT;
+        }
+    }
+
+    // Vortex: tangential swirl around the axis line through VortexCenter + inward/outward pull.
+    // Matches the CPU path in Emitter.cpp.
+    if (UseVortex) {
+        float3 axis = normalize(VortexAxis);
+        float3 rel  = p.pos - VortexCenter;
+        float3 radial = rel - axis * dot(rel, axis);   // perpendicular to axis
+        float  r = length(radial);
+        if (r > 1e-4) {
+            float3 radialDir = radial / r;
+            float3 tangent   = cross(axis, radialDir);
+            float  falloff = (VortexRadius > 0.0) ? max(0.0, 1.0 - r / VortexRadius) : 1.0;
+            float  s = VortexStrength * falloff * DT;
+            p.vel += tangent   * s;
+            p.vel += radialDir * (-VortexInward * s);
         }
     }
 

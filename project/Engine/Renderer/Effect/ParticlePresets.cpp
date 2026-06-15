@@ -57,11 +57,19 @@ static Vector4 Vec4F(const nlohmann::json& j, Vector4 def = {}) {
 void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["name"]             = Name;
     j["renderMode"]       = RenderModeStr(RenderMode);
+    j["simulation"]       = (Simulation == SimMode::GPU) ? "gpu" : "cpu";
     j["blendMode"]        = BlendModeStr(Blend);
     j["emissiveIntensity"]= EmissiveIntensity;
     j["maxParticles"]     = MaxParticles;
     j["loop"]        = Loop;
     j["duration"]    = Duration;
+    j["localSpace"]  = LocalSpace;
+    j["lightRenderer"]         = LightRenderer;
+    j["lightIntensity"]        = LightIntensity;
+    j["lightRange"]            = LightRange;
+    j["lightMaxCount"]         = LightMaxCount;
+    j["lightUseParticleColor"] = LightUseParticleColor;
+    j["lightColor"]            = Vec3J(LightColor);
     j["spriteTexture"] = SpriteTexturePath;
     j["subUVCols"]     = SubUVCols;
     j["subUVRows"]     = SubUVRows;
@@ -70,6 +78,8 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["spawn"]["burstMode"]     = Spawn.BurstMode;
     j["spawn"]["ratePerSecond"] = Spawn.RatePerSecond;
     j["spawn"]["burstCount"]    = Spawn.BurstCount;
+    j["spawn"]["spawnPerUnit"]     = Spawn.SpawnPerUnit;
+    j["spawn"]["spawnPerDistance"] = Spawn.SpawnPerDistance;
     j["spawn"]["shape"]         = ShapeStr(Spawn.Shape);
     j["spawn"]["shapeRadius"]   = Spawn.ShapeRadius;
     j["spawn"]["shapeExtent"]   = Vec3J(Spawn.ShapeExtent);
@@ -101,6 +111,12 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["update"]["attractorPos"]      = Vec3J(Update.AttractorPos);
     j["update"]["attractorStrength"] = Update.AttractorStrength;
     j["update"]["attractorRadius"]   = Update.AttractorRadius;
+    j["update"]["useVortex"]      = Update.UseVortex;
+    j["update"]["vortexCenter"]   = Vec3J(Update.VortexCenter);
+    j["update"]["vortexAxis"]     = Vec3J(Update.VortexAxis);
+    j["update"]["vortexStrength"] = Update.VortexStrength;
+    j["update"]["vortexInward"]   = Update.VortexInward;
+    j["update"]["vortexRadius"]   = Update.VortexRadius;
     j["update"]["collision"]         = Update.Collision;
     j["update"]["restitution"]       = Update.Restitution;
     j["update"]["friction"]          = Update.Friction;
@@ -120,11 +136,19 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
 void EmitterDesc::FromJson(const nlohmann::json& j) {
     Name              = j.value("name", "Emitter");
     RenderMode        = RenderModeFromStr(j.value("renderMode", "sprite"));
+    Simulation        = (j.value("simulation", std::string("cpu")) == "gpu") ? SimMode::GPU : SimMode::CPU;
     Blend             = BlendModeFromStr(j.value("blendMode", "alpha"));
     EmissiveIntensity = j.value("emissiveIntensity", 1.0f);
     MaxParticles      = j.value("maxParticles", 200);
     Loop         = j.value("loop", true);
     Duration     = j.value("duration", 999.0f);
+    LocalSpace   = j.value("localSpace", false);
+    LightRenderer         = j.value("lightRenderer", false);
+    LightIntensity        = j.value("lightIntensity", 2.0f);
+    LightRange            = j.value("lightRange", 3.0f);
+    LightMaxCount         = j.value("lightMaxCount", 8);
+    LightUseParticleColor = j.value("lightUseParticleColor", true);
+    LightColor   = Vec3F(j.value("lightColor", nlohmann::json::array()), {1,1,1});
     SpriteTexturePath = j.value("spriteTexture", std::string());
     SubUVCols         = j.value("subUVCols", 1);
     SubUVRows         = j.value("subUVRows", 1);
@@ -135,6 +159,8 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
         Spawn.BurstMode     = s.value("burstMode",     false);
         Spawn.RatePerSecond = s.value("ratePerSecond", 20.0f);
         Spawn.BurstCount    = s.value("burstCount",    10);
+        Spawn.SpawnPerUnit     = s.value("spawnPerUnit",     false);
+        Spawn.SpawnPerDistance = s.value("spawnPerDistance", 10.0f);
         Spawn.Shape         = ShapeFromStr(s.value("shape", "point"));
         Spawn.ShapeRadius   = s.value("shapeRadius",   0.5f);
         Spawn.ShapeExtent   = Vec3F(s.value("shapeExtent", nlohmann::json::array()), {0.5f,0.5f,0.5f});
@@ -170,6 +196,12 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
         Update.AttractorPos      = Vec3F(u.value("attractorPos", nlohmann::json::array()), {0,0,0});
         Update.AttractorStrength = u.value("attractorStrength", 5.0f);
         Update.AttractorRadius   = u.value("attractorRadius",   10.0f);
+        Update.UseVortex      = u.value("useVortex",      false);
+        Update.VortexCenter   = Vec3F(u.value("vortexCenter", nlohmann::json::array()), {0,0,0});
+        Update.VortexAxis     = Vec3F(u.value("vortexAxis",   nlohmann::json::array()), {0,1,0});
+        Update.VortexStrength = u.value("vortexStrength", 5.0f);
+        Update.VortexInward   = u.value("vortexInward",   1.0f);
+        Update.VortexRadius   = u.value("vortexRadius",   8.0f);
         Update.Collision         = u.value("collision",   false);
         Update.Restitution       = u.value("restitution", 0.3f);
         Update.Friction          = u.value("friction",    0.3f);

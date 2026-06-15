@@ -359,7 +359,7 @@ void SceneRenderer::Render(ID3D12GraphicsCommandList* cmd,
                                    evpX, evpY, evpW, evpH,
                                    CAMERA_NEAR, CAMERA_FAR,
                                    spotSRVSlot, pointSRVSlot,
-                                   contact);
+                                   contact, m_particleLights);
         });
 
     m_rg.Compile();
@@ -1072,13 +1072,42 @@ void EvaluateStateMachine(const SkeletalMeshAsset& mesh, AnimationComponent& a, 
 } // anonymous namespace
 
 void SceneRenderer::UpdateParticles(const SceneManager& scene, float dt) {
+    m_particleLights.clear();
     for (auto& actorPtr : scene.GetActors()) {
         auto* pc = actorPtr->GetComponent<ParticleComponent>();
         if (!pc) continue;
         auto* tc = actorPtr->GetComponent<TransformComponent>();
-        Vector3 worldPos = tc ? tc->GetWorldMatrix().GetTranslation() : Vector3{};
-        for (auto& em : pc->GetEmitters())
+        Matrix4x4 world  = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
+        Vector3   worldPos = world.GetTranslation();
+        for (auto& em : pc->GetEmitters()) {
             em.Update(dt, worldPos);
+
+            // Light Renderer: emit one dynamic point light per particle (CPU emitters only — GPU
+            // particle positions aren't read back), capped at LightMaxCount per emitter.
+            const EmitterDesc& d = em.GetDesc();
+            if (!d.LightRenderer || d.Simulation != SimMode::CPU) continue;
+            int budget = (std::max)(0, d.LightMaxCount);
+            for (const auto& p : em.GetParticles()) {
+                if (budget <= 0) break;
+                if (!p.Active) continue;
+                ParticleLight pl;
+                // Local-space particles live in emitter space; bring them to world.
+                if (d.LocalSpace) {
+                    Vector4 wp = world * Vector4(p.Position.x, p.Position.y, p.Position.z, 1.0f);
+                    pl.pos = Vector3(wp.x, wp.y, wp.z);
+                } else {
+                    pl.pos = p.Position;
+                }
+                Vector3 base = d.LightUseParticleColor
+                    ? Vector3(p.Color.x, p.Color.y, p.Color.z) : d.LightColor;
+                pl.color     = base;
+                // Fade the light with the particle's alpha so lights die out with the particle.
+                pl.intensity = d.LightIntensity * p.Color.w;
+                pl.range     = d.LightRange;
+                m_particleLights.push_back(pl);
+                --budget;
+            }
+        }
     }
 }
 

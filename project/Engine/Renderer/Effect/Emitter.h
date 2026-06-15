@@ -27,6 +27,8 @@ private:
     std::vector<Particle> m_particles;
     float    m_spawnAccum   = 0.0f;
     float    m_elapsed      = 0.0f;
+    Vector3  m_lastWorldPos = { 0.0f, 0.0f, 0.0f };  // for spawn-over-distance
+    bool     m_lastPosValid = false;
     int      m_activeCount  = 0;
     uint32_t m_resetCount      = 0;
     uint32_t m_burstFireCount  = 0;

@@ -402,6 +402,11 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             Row("Duration (s)");
             ImGui::DragFloat("##dur", &d.Duration, 0.1f, 0.0f, 999.0f, "%.1f");
         }
+
+        Row("Local Space");
+        ImGui::Checkbox("##local", &d.LocalSpace);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("粒子をエミッタ基準でシミュレートし追従させる\n(CPUのみ。GPUはワールド空間扱い)");
         EndProps();
 
         ImGui::Spacing();
@@ -426,8 +431,17 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             if (ImGui::Button("Fire Burst##fb", ImVec2(-1, 0)))
                 em.FireBurst();
         } else {
-            Row("Rate / sec");
-            ImGui::DragFloat("##rs", &d.Spawn.RatePerSecond, 0.5f, 0.0f, 5000.0f, "%.1f");
+            Row("Spawn / Distance");
+            ImGui::Checkbox("##spu", &d.Spawn.SpawnPerUnit);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("エミッタの移動量に応じてスポーン(Niagara Spawn Per Unit)\n移動した線分に均等配置。Ribbonと相性良。CPUのみ");
+            if (d.Spawn.SpawnPerUnit) {
+                Row("Particles / Unit");
+                ImGui::DragFloat("##spd", &d.Spawn.SpawnPerDistance, 0.1f, 0.0f, 1000.0f, "%.2f");
+            } else {
+                Row("Rate / sec");
+                ImGui::DragFloat("##rs", &d.Spawn.RatePerSecond, 0.5f, 0.0f, 5000.0f, "%.1f");
+            }
         }
         EndProps();
 
@@ -598,6 +612,34 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
         EndProps();
 
         ImGui::Spacing();
+        ImGui::TextDisabled("Vortex");
+        ImGui::Separator();
+        BeginProps();
+        Row("Enable");
+        ImGui::Checkbox("##vore", &d.Update.UseVortex);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("軸の周りに渦巻く力(Niagara Vortex)。CPU/GPU両対応");
+        if (d.Update.UseVortex) {
+            Row("Center");
+            ImGui::DragFloat3("##vorc", &d.Update.VortexCenter.x, 0.1f);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("エミッタ位置からのオフセット（渦はエミッタに追従）\n(0,0,0)でエミッタ中心");
+            Row("Axis");
+            ImGui::DragFloat3("##vora", &d.Update.VortexAxis.x, 0.01f);
+            Row("Strength");
+            ImGui::DragFloat("##vors", &d.Update.VortexStrength, 0.1f, -50.0f, 50.0f, "%.1f");
+            Row("Inward");
+            ImGui::DragFloat("##vori", &d.Update.VortexInward, 0.05f, -5.0f, 5.0f, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("正=軸へ吸い込む(竜巻)  負=外へ押し出す");
+            Row("Radius");
+            ImGui::DragFloat("##vorr", &d.Update.VortexRadius, 0.1f, 0.0f, 100.0f, "%.1f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("減衰距離。0=減衰なし");
+        }
+        EndProps();
+
+        ImGui::Spacing();
         ImGui::TextDisabled("Collision (GPU, depth buffer)");
         ImGui::Separator();
         BeginProps();
@@ -696,6 +738,35 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             ImGui::TextDisabled("Width driven by particle Size.");
             ImGui::TextDisabled("Colour driven by Initialize/Update.");
         }
+
+        // Light Renderer — applies to any render mode (CPU emitters only).
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f,0.85f,0.4f,1.0f), "Light Renderer");
+        ImGui::Separator();
+        BeginProps();
+        Row("Enable");
+        ImGui::Checkbox("##lre", &d.LightRenderer);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("粒子ごとに動的ポイントライトを発生させシーンを照らす\n(Niagara Light Renderer。CPU simのみ)");
+        if (d.LightRenderer) {
+            if (d.Simulation != SimMode::CPU)
+                ImGui::TextColored(ImVec4(1.0f,0.5f,0.4f,1.0f), "GPU sim では無効 (CPUのみ)");
+            Row("Intensity");
+            ImGui::DragFloat("##lri", &d.LightIntensity, 0.05f, 0.0f, 50.0f, "%.2f");
+            Row("Range");
+            ImGui::DragFloat("##lrr", &d.LightRange, 0.05f, 0.0f, 100.0f, "%.2f");
+            Row("Max Lights");
+            ImGui::DragInt("##lrm", &d.LightMaxCount, 0.2f, 0, 256);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("このエミッタから生成するライト数の上限");
+            Row("Use Particle Color");
+            ImGui::Checkbox("##lruc", &d.LightUseParticleColor);
+            if (!d.LightUseParticleColor) {
+                Row("Light Color");
+                ImGui::ColorEdit3("##lrc", &d.LightColor.x);
+            }
+        }
+        EndProps();
         break;
     }
     } // switch

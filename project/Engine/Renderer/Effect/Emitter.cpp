@@ -58,6 +58,7 @@ void Emitter::Reset() {
     m_elapsed     = 0.0f;
     m_activeCount = 0;
     m_burstDone   = false;
+    m_lastPosValid = false;
     ++m_resetCount;
 }
 
@@ -65,12 +66,35 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
     if (!m_playing) return;
     m_elapsed += dt;
 
+    if (!m_lastPosValid) { m_lastWorldPos = worldPos; m_lastPosValid = true; }
+
+    // Resolve the spawn-base position: world-space emitters detach particles at the emitter's
+    // world position; local-space emitters simulate around the origin and are transformed by the
+    // parent's world matrix at render time (so particles follow the emitter).
+    const Vector3 spawnBase = m_desc.LocalSpace ? Vector3(0.0f, 0.0f, 0.0f) : worldPos;
+
     if (m_desc.Spawn.BurstMode) {
         // Burst mode: fire once (or once per loop cycle)
         if (!m_burstDone && m_desc.Spawn.BurstCount > 0) {
             for (int i = 0; i < m_desc.Spawn.BurstCount; ++i)
-                SpawnOne(worldPos);
+                SpawnOne(spawnBase);
             m_burstDone = true;
+        }
+    } else if (m_desc.Spawn.SpawnPerUnit) {
+        // Spawn-over-distance: emit evenly along the world segment travelled since last frame,
+        // so a moving emitter leaves a continuous trail (count scales with world distance).
+        if (m_desc.Loop || m_elapsed <= m_desc.Duration) {
+            Vector3 delta = worldPos - m_lastWorldPos;
+            float dist = std::sqrt(delta.x*delta.x + delta.y*delta.y + delta.z*delta.z);
+            m_spawnAccum += dist * m_desc.Spawn.SpawnPerDistance;
+            int count = static_cast<int>(m_spawnAccum);
+            for (int i = 0; i < count; ++i) {
+                float frac = (count > 1) ? static_cast<float>(i + 1) / static_cast<float>(count) : 1.0f;
+                Vector3 segPoint = m_desc.LocalSpace ? Vector3(0.0f, 0.0f, 0.0f)
+                                                     : m_lastWorldPos + delta * frac;
+                SpawnOne(segPoint);
+            }
+            m_spawnAccum -= static_cast<float>(count);
         }
     } else {
         // Continuous mode: spawn at RatePerSecond
@@ -78,15 +102,19 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
             m_spawnAccum += dt * m_desc.Spawn.RatePerSecond;
             while (m_spawnAccum >= 1.0f) {
                 m_spawnAccum -= 1.0f;
-                SpawnOne(worldPos);
+                SpawnOne(spawnBase);
             }
         }
     }
+    m_lastWorldPos = worldPos;
 
     // Update
     m_activeCount = 0;
     const auto& upd = m_desc.Update;
     const auto& ini = m_desc.Init;
+    // VortexCenter is an offset from the emitter so the swirl follows it (world-space emitters add
+    // worldPos; local-space ones already simulate around the origin). Keeps GPU/CPU in sync.
+    const Vector3 vortexCenter = m_desc.LocalSpace ? upd.VortexCenter : worldPos + upd.VortexCenter;
     for (auto& p : m_particles) {
         if (!p.Active) continue;
 
@@ -116,6 +144,25 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
                 float falloff = 1.0f - dist / upd.AttractorRadius;
                 float f = upd.AttractorStrength * falloff * dt / dist;
                 p.Velocity += Vector3(dx * f, dy * f, dz * f);
+            }
+        }
+
+        // Vortex force: swirl tangentially around the axis line through VortexCenter, plus an
+        // optional inward/outward pull (tornado). Matches ParticleGPU_Update.CS.hlsl.
+        if (upd.UseVortex) {
+            Vector3 axis = upd.VortexAxis.GetSafeNormal();
+            Vector3 rel  = p.Position - vortexCenter;
+            float   along = rel.x*axis.x + rel.y*axis.y + rel.z*axis.z;
+            Vector3 radial = rel - axis * along;                 // component perpendicular to axis
+            float   r = std::sqrt(radial.x*radial.x + radial.y*radial.y + radial.z*radial.z);
+            if (r > 1e-4f) {
+                Vector3 radialDir = radial / r;
+                Vector3 tangent   = Vector3::Cross(axis, radialDir);  // swirl direction
+                float falloff = (upd.VortexRadius > 0.0f)
+                    ? std::max(0.0f, 1.0f - r / upd.VortexRadius) : 1.0f;
+                float s = upd.VortexStrength * falloff * dt;
+                p.Velocity += tangent   * s;                     // tangential swirl
+                p.Velocity += radialDir * (-upd.VortexInward * s); // inward (>0) / outward (<0)
             }
         }
 

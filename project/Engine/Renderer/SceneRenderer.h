@@ -84,6 +84,7 @@ private:
     std::unordered_set<uint64_t>      m_visible;          // ids passing the camera frustum
 
     std::vector<ShadowCaster>         m_shadowCasters;    // gathered once per frame, shared by shadow passes
+    std::vector<ParticleLight>        m_particleLights;   // per-particle Light Renderer lights, rebuilt in UpdateParticles
 
     void BuildVisibleSet(const SceneManager& scene, const Matrix4x4& viewProj);
 

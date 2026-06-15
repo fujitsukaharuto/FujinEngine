@@ -31,6 +31,12 @@ struct SpawnModule {
     bool         BurstMode     = false;     // true=burst only, false=continuous rate
     float        RatePerSecond = 20.0f;
     int          BurstCount    = 10;        // particles spawned per burst
+    // Spawn-over-distance (Niagara "Spawn Per Unit"): emit as the emitter moves through the
+    // world instead of over time. Spawns are placed evenly along the travelled segment so a
+    // moving emitter leaves a continuous trail (pairs naturally with Ribbon render mode).
+    // CPU emitters only. Mutually exclusive with BurstMode; coexists with RatePerSecond.
+    bool         SpawnPerUnit     = false;
+    float        SpawnPerDistance = 10.0f;  // particles per world unit travelled
     EmitterShape Shape         = EmitterShape::Point;
     float        ShapeRadius   = 0.5f;
     Vector3      ShapeExtent   = { 0.5f, 0.5f, 0.5f };
@@ -68,6 +74,15 @@ struct UpdateModule {
     Vector3 AttractorPos        = { 0.0f, 0.0f, 0.0f };
     float   AttractorStrength   = 5.0f;
     float   AttractorRadius     = 10.0f;
+    // Vortex force (Niagara "Vortex Velocity"): swirl tangentially around an axis line through a
+    // center point, with optional inward pull. Strength = tangential accel; Inward>0 sucks toward
+    // the axis (tornado), <0 pushes out. Radius = linear falloff distance (0 = no falloff). CPU + GPU.
+    bool    UseVortex      = false;
+    Vector3 VortexCenter   = { 0.0f, 0.0f, 0.0f };
+    Vector3 VortexAxis     = { 0.0f, 1.0f, 0.0f };
+    float   VortexStrength = 5.0f;
+    float   VortexInward   = 1.0f;
+    float   VortexRadius   = 8.0f;
     // GPU depth-buffer collision (screen-space, GPU emitters only)
     bool    Collision    = false;
     float   Restitution  = 0.3f;   // bounce
@@ -125,6 +140,21 @@ struct EmitterDesc {
     int                MaxParticles = 200;
     bool               Loop         = true;
     float              Duration     = 999.0f;  // spawn stop time when Loop=false
+
+    // Local-space simulation (Niagara "Local Space"): particles are simulated relative to the
+    // emitter's transform and follow it, instead of being detached into world space at spawn.
+    // CPU emitters: all render modes. GPU emitters: treated as world space (not yet supported).
+    bool               LocalSpace   = false;
+
+    // Light Renderer (Niagara): emit a dynamic point light per particle so the effect actually
+    // illuminates the scene. Lights are injected into the clustered lighting pass. CPU emitters
+    // only (GPU particle positions aren't read back). LightMaxCount caps lights from this emitter.
+    bool               LightRenderer    = false;
+    float              LightIntensity   = 2.0f;
+    float              LightRange       = 3.0f;
+    int                LightMaxCount    = 8;
+    bool               LightUseParticleColor = true;
+    Vector3            LightColor       = { 1.0f, 1.0f, 1.0f };
 
     // Sprite texture + SubUV flipbook (Niagara-style). Empty path = procedural soft circle.
     // SubUVCols×Rows == 1×1 means the whole texture (no flipbook); >1 plays frames over lifetime.

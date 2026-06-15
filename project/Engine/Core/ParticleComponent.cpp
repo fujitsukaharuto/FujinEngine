@@ -62,13 +62,33 @@ bool ParticleComponent::SaveEffect(const std::string& path) const {
 void ParticleComponent::ToJson(nlohmann::json& j) const {
     j["effectPath"] = EffectPath;
     j["autoPlay"]   = AutoPlay;
+    // Serialize emitters inline so the scene stays self-contained even with no external .fx.json
+    // (e.g. emitters authored directly in code/scene). Without this, in-memory emitters vanish on
+    // scene round-trip because only the (empty) EffectPath was stored.
+    j["emitters"] = nlohmann::json::array();
+    for (auto& e : m_emitters) {
+        nlohmann::json ej;
+        e.GetDesc().ToJson(ej);
+        j["emitters"].push_back(ej);
+    }
 }
 
 void ParticleComponent::FromJson(const nlohmann::json& j) {
     EffectPath = j.value("effectPath", "");
     AutoPlay   = j.value("autoPlay",   true);
+    // An external effect file is the source of truth when present; otherwise restore the emitters
+    // embedded in the scene.
+    bool loaded = false;
     if (!EffectPath.empty())
-        LoadEffect(EffectPath);
+        loaded = LoadEffect(EffectPath);
+    if (!loaded && j.contains("emitters") && j["emitters"].is_array()) {
+        m_emitters.clear();
+        for (auto& ej : j["emitters"]) {
+            EmitterDesc desc;
+            desc.FromJson(ej);
+            m_emitters.emplace_back().Initialize(desc);
+        }
+    }
 }
 
 } // namespace Fujin

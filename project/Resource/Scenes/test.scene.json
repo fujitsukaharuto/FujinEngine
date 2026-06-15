@@ -943,6 +943,163 @@
         {
           "autoPlay": true,
           "effectPath": "",
+          "emitters": [
+            {
+              "beam": {
+                "color": [
+                  0.5,
+                  0.800000011920929,
+                  1.0,
+                  1.0
+                ],
+                "end": [
+                  0.0,
+                  5.0,
+                  0.0
+                ],
+                "noiseAmp": 0.20000000298023224,
+                "noiseSpeed": 3.0,
+                "segments": 8,
+                "start": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "width": 0.07999999821186066
+              },
+              "blendMode": "alpha",
+              "duration": 999.0,
+              "emissiveIntensity": 1.0,
+              "init": {
+                "colorEnd": [
+                  0.6000000238418579,
+                  0.6000000238418579,
+                  0.6000000238418579,
+                  0.0
+                ],
+                "colorMid": [
+                  1.0,
+                  0.5,
+                  0.0,
+                  0.800000011920929
+                ],
+                "colorStart": [
+                  0.8500000238418579,
+                  0.8500000238418579,
+                  0.8500000238418579,
+                  0.550000011920929
+                ],
+                "lifeMax": 3.0,
+                "lifeMin": 1.7999999523162842,
+                "rotRateMax": 30.0,
+                "rotRateMin": -30.0,
+                "sizeMax": 0.3499999940395355,
+                "sizeMin": 0.15000000596046448,
+                "useColorMid": false,
+                "velMax": [
+                  0.20000000298023224,
+                  2.0,
+                  0.20000000298023224
+                ],
+                "velMin": [
+                  -0.20000000298023224,
+                  1.2000000476837158,
+                  -0.20000000298023224
+                ]
+              },
+              "lightColor": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "lightIntensity": 2.0,
+              "lightMaxCount": 8,
+              "lightRange": 3.0,
+              "lightRenderer": false,
+              "lightUseParticleColor": true,
+              "localSpace": false,
+              "loop": true,
+              "maxParticles": 150,
+              "meshPath": "",
+              "name": "Steam",
+              "renderMode": "sprite",
+              "simulation": "cpu",
+              "spawn": {
+                "burstCount": 10,
+                "burstMode": false,
+                "coneAngleDeg": 30.0,
+                "emitDir": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "ratePerSecond": 25.0,
+                "shape": "point",
+                "shapeExtent": [
+                  0.5,
+                  0.5,
+                  0.5
+                ],
+                "shapeRadius": 0.5,
+                "spawnPerDistance": 10.0,
+                "spawnPerUnit": false
+              },
+              "spriteTexture": "",
+              "subUVCols": 1,
+              "subUVRows": 1,
+              "update": {
+                "attractorPos": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "attractorRadius": 10.0,
+                "attractorStrength": 5.0,
+                "collPush": 0.05000000074505806,
+                "collision": false,
+                "drag": 0.8999999761581421,
+                "fadeColor": true,
+                "friction": 0.30000001192092896,
+                "gravity": [
+                  0.0,
+                  0.30000001192092896,
+                  0.0
+                ],
+                "restitution": 0.30000001192092896,
+                "shrinkSize": false,
+                "sizeCurve": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "sizeEndMult": 2.5,
+                "turbFrequency": 0.5,
+                "turbStrength": 2.0,
+                "turbulence": false,
+                "useAttractor": false,
+                "useSizeCurve": false,
+                "useVortex": false,
+                "vortexAxis": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "vortexCenter": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "vortexInward": 1.0,
+                "vortexRadius": 8.0,
+                "vortexStrength": 5.0
+              }
+            }
+          ],
           "type": "ParticleComponent"
         }
       ],
@@ -974,6 +1131,163 @@
         {
           "autoPlay": true,
           "effectPath": "",
+          "emitters": [
+            {
+              "beam": {
+                "color": [
+                  0.5,
+                  0.800000011920929,
+                  1.0,
+                  1.0
+                ],
+                "end": [
+                  0.0,
+                  5.0,
+                  0.0
+                ],
+                "noiseAmp": 0.20000000298023224,
+                "noiseSpeed": 3.0,
+                "segments": 8,
+                "start": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "width": 0.07999999821186066
+              },
+              "blendMode": "alpha",
+              "duration": 999.0,
+              "emissiveIntensity": 1.0,
+              "init": {
+                "colorEnd": [
+                  0.8999999761581421,
+                  0.20000000298023224,
+                  0.0,
+                  0.0
+                ],
+                "colorMid": [
+                  1.0,
+                  0.5,
+                  0.0,
+                  0.800000011920929
+                ],
+                "colorStart": [
+                  1.0,
+                  0.8500000238418579,
+                  0.30000001192092896,
+                  1.0
+                ],
+                "lifeMax": 0.8999999761581421,
+                "lifeMin": 0.30000001192092896,
+                "rotRateMax": 0.0,
+                "rotRateMin": 0.0,
+                "sizeMax": 0.10000000149011612,
+                "sizeMin": 0.03999999910593033,
+                "useColorMid": false,
+                "velMax": [
+                  4.0,
+                  8.0,
+                  4.0
+                ],
+                "velMin": [
+                  -4.0,
+                  -1.0,
+                  -4.0
+                ]
+              },
+              "lightColor": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "lightIntensity": 2.0,
+              "lightMaxCount": 8,
+              "lightRange": 3.0,
+              "lightRenderer": false,
+              "lightUseParticleColor": true,
+              "localSpace": false,
+              "loop": true,
+              "maxParticles": 200,
+              "meshPath": "",
+              "name": "Sparks",
+              "renderMode": "sprite",
+              "simulation": "cpu",
+              "spawn": {
+                "burstCount": 15,
+                "burstMode": false,
+                "coneAngleDeg": 30.0,
+                "emitDir": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "ratePerSecond": 40.0,
+                "shape": "point",
+                "shapeExtent": [
+                  0.5,
+                  0.5,
+                  0.5
+                ],
+                "shapeRadius": 0.5,
+                "spawnPerDistance": 10.0,
+                "spawnPerUnit": false
+              },
+              "spriteTexture": "",
+              "subUVCols": 1,
+              "subUVRows": 1,
+              "update": {
+                "attractorPos": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "attractorRadius": 10.0,
+                "attractorStrength": 5.0,
+                "collPush": 0.05000000074505806,
+                "collision": false,
+                "drag": 0.05000000074505806,
+                "fadeColor": true,
+                "friction": 0.30000001192092896,
+                "gravity": [
+                  0.0,
+                  -9.800000190734863,
+                  0.0
+                ],
+                "restitution": 0.30000001192092896,
+                "shrinkSize": true,
+                "sizeCurve": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "sizeEndMult": 0.0,
+                "turbFrequency": 0.5,
+                "turbStrength": 2.0,
+                "turbulence": false,
+                "useAttractor": false,
+                "useSizeCurve": false,
+                "useVortex": false,
+                "vortexAxis": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "vortexCenter": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "vortexInward": 1.0,
+                "vortexRadius": 8.0,
+                "vortexStrength": 5.0
+              }
+            }
+          ],
           "type": "ParticleComponent"
         }
       ],
@@ -1005,6 +1319,163 @@
         {
           "autoPlay": true,
           "effectPath": "",
+          "emitters": [
+            {
+              "beam": {
+                "color": [
+                  0.5,
+                  0.8500000238418579,
+                  1.0,
+                  0.8999999761581421
+                ],
+                "end": [
+                  0.0,
+                  4.0,
+                  0.0
+                ],
+                "noiseAmp": 0.25,
+                "noiseSpeed": 4.0,
+                "segments": 10,
+                "start": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "width": 0.05999999865889549
+              },
+              "blendMode": "alpha",
+              "duration": 999.0,
+              "emissiveIntensity": 1.0,
+              "init": {
+                "colorEnd": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "colorMid": [
+                  1.0,
+                  0.5,
+                  0.0,
+                  0.800000011920929
+                ],
+                "colorStart": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "lifeMax": 2.0,
+                "lifeMin": 1.0,
+                "rotRateMax": 180.0,
+                "rotRateMin": -180.0,
+                "sizeMax": 0.30000001192092896,
+                "sizeMin": 0.10000000149011612,
+                "useColorMid": false,
+                "velMax": [
+                  1.0,
+                  3.0,
+                  1.0
+                ],
+                "velMin": [
+                  -1.0,
+                  1.0,
+                  -1.0
+                ]
+              },
+              "lightColor": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "lightIntensity": 2.0,
+              "lightMaxCount": 8,
+              "lightRange": 3.0,
+              "lightRenderer": false,
+              "lightUseParticleColor": true,
+              "localSpace": false,
+              "loop": true,
+              "maxParticles": 1,
+              "meshPath": "",
+              "name": "Beam",
+              "renderMode": "beam",
+              "simulation": "cpu",
+              "spawn": {
+                "burstCount": 10,
+                "burstMode": false,
+                "coneAngleDeg": 30.0,
+                "emitDir": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "ratePerSecond": 20.0,
+                "shape": "point",
+                "shapeExtent": [
+                  0.5,
+                  0.5,
+                  0.5
+                ],
+                "shapeRadius": 0.5,
+                "spawnPerDistance": 10.0,
+                "spawnPerUnit": false
+              },
+              "spriteTexture": "",
+              "subUVCols": 1,
+              "subUVRows": 1,
+              "update": {
+                "attractorPos": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "attractorRadius": 10.0,
+                "attractorStrength": 5.0,
+                "collPush": 0.05000000074505806,
+                "collision": false,
+                "drag": 0.10000000149011612,
+                "fadeColor": true,
+                "friction": 0.30000001192092896,
+                "gravity": [
+                  0.0,
+                  -9.800000190734863,
+                  0.0
+                ],
+                "restitution": 0.30000001192092896,
+                "shrinkSize": false,
+                "sizeCurve": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "sizeEndMult": 0.0,
+                "turbFrequency": 0.5,
+                "turbStrength": 2.0,
+                "turbulence": false,
+                "useAttractor": false,
+                "useSizeCurve": false,
+                "useVortex": false,
+                "vortexAxis": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "vortexCenter": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "vortexInward": 1.0,
+                "vortexRadius": 8.0,
+                "vortexStrength": 5.0
+              }
+            }
+          ],
           "type": "ParticleComponent"
         }
       ],
@@ -1036,6 +1507,163 @@
         {
           "autoPlay": true,
           "effectPath": "",
+          "emitters": [
+            {
+              "beam": {
+                "color": [
+                  0.5,
+                  0.800000011920929,
+                  1.0,
+                  1.0
+                ],
+                "end": [
+                  0.0,
+                  5.0,
+                  0.0
+                ],
+                "noiseAmp": 0.20000000298023224,
+                "noiseSpeed": 3.0,
+                "segments": 8,
+                "start": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "width": 0.07999999821186066
+              },
+              "blendMode": "alpha",
+              "duration": 999.0,
+              "emissiveIntensity": 1.0,
+              "init": {
+                "colorEnd": [
+                  0.6000000238418579,
+                  0.10000000149011612,
+                  0.0,
+                  0.0
+                ],
+                "colorMid": [
+                  1.0,
+                  0.5,
+                  0.0,
+                  0.800000011920929
+                ],
+                "colorStart": [
+                  1.0,
+                  0.6499999761581421,
+                  0.10000000149011612,
+                  1.0
+                ],
+                "lifeMax": 1.2000000476837158,
+                "lifeMin": 0.5,
+                "rotRateMax": 60.0,
+                "rotRateMin": -60.0,
+                "sizeMax": 0.30000001192092896,
+                "sizeMin": 0.11999999731779099,
+                "useColorMid": false,
+                "velMax": [
+                  0.4000000059604645,
+                  3.5,
+                  0.4000000059604645
+                ],
+                "velMin": [
+                  -0.4000000059604645,
+                  1.5,
+                  -0.4000000059604645
+                ]
+              },
+              "lightColor": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "lightIntensity": 2.0,
+              "lightMaxCount": 8,
+              "lightRange": 3.0,
+              "lightRenderer": false,
+              "lightUseParticleColor": true,
+              "localSpace": false,
+              "loop": true,
+              "maxParticles": 512,
+              "meshPath": "",
+              "name": "GPUFire",
+              "renderMode": "sprite",
+              "simulation": "gpu",
+              "spawn": {
+                "burstCount": 10,
+                "burstMode": false,
+                "coneAngleDeg": 30.0,
+                "emitDir": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "ratePerSecond": 60.0,
+                "shape": "sphere",
+                "shapeExtent": [
+                  0.5,
+                  0.5,
+                  0.5
+                ],
+                "shapeRadius": 0.20000000298023224,
+                "spawnPerDistance": 10.0,
+                "spawnPerUnit": false
+              },
+              "spriteTexture": "",
+              "subUVCols": 1,
+              "subUVRows": 1,
+              "update": {
+                "attractorPos": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "attractorRadius": 10.0,
+                "attractorStrength": 5.0,
+                "collPush": 0.05000000074505806,
+                "collision": false,
+                "drag": 0.6000000238418579,
+                "fadeColor": true,
+                "friction": 0.30000001192092896,
+                "gravity": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "restitution": 0.30000001192092896,
+                "shrinkSize": true,
+                "sizeCurve": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "sizeEndMult": 0.0,
+                "turbFrequency": 0.5,
+                "turbStrength": 2.0,
+                "turbulence": false,
+                "useAttractor": false,
+                "useSizeCurve": false,
+                "useVortex": false,
+                "vortexAxis": [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "vortexCenter": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "vortexInward": 1.0,
+                "vortexRadius": 8.0,
+                "vortexStrength": 5.0
+              }
+            }
+          ],
           "type": "ParticleComponent"
         }
       ],

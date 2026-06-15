@@ -6,10 +6,21 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstdint>
+#include <vector>
 
 namespace Fujin {
 
 class SceneManager;
+
+// A dynamic point light emitted per particle by an emitter's Light Renderer (Niagara-style).
+// SceneRenderer collects these from CPU particle emitters and LightingPass injects them into the
+// clustered light list each frame, so particle effects actually illuminate the scene.
+struct ParticleLight {
+    Vector3 pos;
+    Vector3 color;
+    float   intensity = 1.0f;
+    float   range     = 3.0f;
+};
 
 // Screen-space contact shadows for the directional (sun) light: a short ray-march in screen space
 // that adds the fine contact/grounding shadows CSM is too coarse to resolve. Strength = 0 → off
@@ -45,7 +56,8 @@ public:
                  float    nearZ = 0.1f, float farZ = 1000.0f,
                  uint32_t spotShadowSRVSlot = 0,
                  uint32_t pointShadowSRVSlot = 0,
-                 const ContactShadowSettings& contact = {});
+                 const ContactShadowSettings& contact = {},
+                 const std::vector<ParticleLight>& particleLights = {});
 
     // CPU: select up to MAX_SHADOW_SPOTS shadow-casting spot lights (nearest to the camera), assign
     // stable slots, and compute the per-slot cache dirty flag (NeedsRender) from a signature of the

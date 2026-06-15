@@ -15,6 +15,12 @@ namespace Fujin {
 
 static constexpr float PI = 3.14159265f;
 
+// Transform a point (w=1) by a world matrix — used to bring local-space particle positions to world.
+static inline Vector3 XformPoint(const Matrix4x4& m, const Vector3& p) {
+    Vector4 r = m * Vector4(p.x, p.y, p.z, 1.0f);
+    return Vector3(r.x, r.y, r.z);
+}
+
 // ── Utility: create committed upload buffer and return persistent map ─────────
 static bool CreateUploadBuffer(ID3D12Device* dev, UINT64 size,
                                ComPtr<ID3D12Resource>& buf, void** mapped) {
@@ -553,7 +559,8 @@ bool ParticlePass::InitGPUEmitter(ID3D12Device* dev, uint64_t key, uint32_t maxP
     UINT64 spawnUploadSize = (UINT64)maxParticles * sizeof(GPUSpawnData);
     for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i) {
         void* p = nullptr;
-        if (!CreateUploadBuffer(dev, 512, s.computeCB[i], &p)) return false;
+        // 768B = SpawnParams at offset 0 (256B region) + UpdateParams at offset 256 (304B, padded).
+        if (!CreateUploadBuffer(dev, 768, s.computeCB[i], &p)) return false;
         s.computeCBMapped[i] = reinterpret_cast<uint8_t*>(p);
 
         if (!CreateUploadBuffer(dev, spawnUploadSize, s.spawnUpload[i], &p)) return false;
@@ -654,6 +661,8 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
     for (auto& actorPtr : scene.GetActors()) {
         auto* pc = actorPtr->GetComponent<ParticleComponent>();
         if (!pc) continue;
+        auto* tc = actorPtr->GetComponent<TransformComponent>();
+        Matrix4x4 world = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
         for (auto& em : pc->GetEmitters()) {
             const EmitterDesc& d = em.GetDesc();
             if (d.RenderMode != EmitterRenderMode::Sprite) continue;
@@ -661,8 +670,10 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
             uint32_t start = total, n = 0;
             for (auto& p : em.GetParticles()) {
                 if (!p.Active || total >= MAX_SPRITES) continue;
+                // Local-space emitters store positions relative to the emitter; transform to world.
+                Vector3 wp = d.LocalSpace ? XformPoint(world, p.Position) : p.Position;
                 auto& iv  = dst[total];
-                iv.pos[0] = p.Position.x; iv.pos[1] = p.Position.y; iv.pos[2] = p.Position.z;
+                iv.pos[0] = wp.x; iv.pos[1] = wp.y; iv.pos[2] = wp.z;
                 iv.size   = p.Size;
                 iv.rot    = p.Rotation * 3.14159f / 180.0f;
                 iv.pad[0] = (p.Lifetime > 1e-4f) ? (p.Age / p.Lifetime) : 0.0f;   // ageFrac → flipbook
@@ -720,6 +731,8 @@ void ParticlePass::DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t fi
     for (auto& actorPtr : scene.GetActors()) {
         auto* pc = actorPtr->GetComponent<ParticleComponent>();
         if (!pc) continue;
+        auto* tc = actorPtr->GetComponent<TransformComponent>();
+        Matrix4x4 world = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
         for (auto& em : pc->GetEmitters()) {
             const EmitterDesc& d = em.GetDesc();
             if (d.RenderMode != EmitterRenderMode::Mesh || d.MeshPath.empty()) continue;
@@ -729,8 +742,9 @@ void ParticlePass::DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t fi
             uint32_t start = total, n = 0;
             for (auto& p : em.GetParticles()) {
                 if (!p.Active || total >= MAX_SPRITES) continue;
+                Vector3 wp = d.LocalSpace ? XformPoint(world, p.Position) : p.Position;
                 auto& iv  = dst[total];
-                iv.pos[0] = p.Position.x; iv.pos[1] = p.Position.y; iv.pos[2] = p.Position.z;
+                iv.pos[0] = wp.x; iv.pos[1] = wp.y; iv.pos[2] = wp.z;
                 iv.size   = p.Size;
                 iv.rot    = p.Rotation * 3.14159f / 180.0f;
                 iv.pad[0] = iv.pad[1] = iv.pad[2] = 0.0f;
@@ -860,10 +874,13 @@ void ParticlePass::DrawRibbons(ID3D12GraphicsCommandList* cmd, uint32_t fi,
         for (auto& actorPtr : scene.GetActors()) {
             auto* pc = actorPtr->GetComponent<ParticleComponent>();
             if (!pc) continue;
+            auto* tc = actorPtr->GetComponent<TransformComponent>();
+            Matrix4x4 world = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
             for (auto& em : pc->GetEmitters()) {
                 if (em.GetDesc().RenderMode != EmitterRenderMode::Ribbon) continue;
                 if (em.GetDesc().Blend != targetBlend) continue;
                 float emEI = em.GetDesc().EmissiveIntensity;
+                bool  local = em.GetDesc().LocalSpace;
 
                 std::vector<const Particle*> sorted;
                 for (auto& p : em.GetParticles())
@@ -877,7 +894,8 @@ void ParticlePass::DrawRibbons(ID3D12GraphicsCommandList* cmd, uint32_t fi,
                     if (startOffset + vtxCount + 6 > MAX_BEAM_VERTS) break;
                     const Particle* pa = sorted[i];
                     const Particle* pb = sorted[i + 1];
-                    Vector3 p0 = pa->Position, p1 = pb->Position;
+                    Vector3 p0 = local ? XformPoint(world, pa->Position) : pa->Position;
+                    Vector3 p1 = local ? XformPoint(world, pb->Position) : pb->Position;
                     Vector3 seg = (p1 - p0).GetSafeNormal();
                     Vector3 mid = Vector3((p0.x+p1.x)*0.5f,(p0.y+p1.y)*0.5f,(p0.z+p1.z)*0.5f);
                     Vector3 toCam = (camPos - mid).GetSafeNormal();
@@ -1088,8 +1106,11 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                 uint32_t Collision;         float Restitution;       float Friction;         float CollPush; // row 12
                 uint32_t UseSizeCurve;      float _sccpad[3];         // row 13
                 float    SizeCurve[8];      // rows 14-15 (tightly packed, matches float4[2] in HLSL)
+                uint32_t UseVortex;         float VortexStrength;    float VortexInward;     float VortexRadius; // row 16
+                float    VortexCenter[3];   float _vcpad;            // row 17
+                float    VortexAxis[3];     float _vapad;            // row 18
             };
-            static_assert(sizeof(UpdateParamsCB) == 256, "UpdateParamsCB layout mismatch");
+            static_assert(sizeof(UpdateParamsCB) == 304, "UpdateParamsCB layout mismatch");
 
             UpdateParamsCB upCB = {};
             upCB.Gravity[0]      = desc.Update.Gravity.x;
@@ -1126,6 +1147,18 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             upCB.CollPush    = desc.Update.CollPush;
             upCB.UseSizeCurve = desc.Update.UseSizeCurve ? 1u : 0u;
             for (int k = 0; k < 8; ++k) upCB.SizeCurve[k] = desc.Update.SizeCurve[k];
+            upCB.UseVortex      = desc.Update.UseVortex ? 1u : 0u;
+            upCB.VortexStrength = desc.Update.VortexStrength;
+            upCB.VortexInward   = desc.Update.VortexInward;
+            upCB.VortexRadius   = desc.Update.VortexRadius;
+            // GPU particles live in world space; offset the vortex center by the emitter world pos
+            // so the swirl follows the emitter (matches the CPU path in Emitter::Update).
+            upCB.VortexCenter[0] = desc.Update.VortexCenter.x + worldPos.x;
+            upCB.VortexCenter[1] = desc.Update.VortexCenter.y + worldPos.y;
+            upCB.VortexCenter[2] = desc.Update.VortexCenter.z + worldPos.z;
+            upCB.VortexAxis[0]  = desc.Update.VortexAxis.x;
+            upCB.VortexAxis[1]  = desc.Update.VortexAxis.y;
+            upCB.VortexAxis[2]  = desc.Update.VortexAxis.z;
             memcpy(s.computeCBMapped[fi] + 256, &upCB, sizeof(upCB));
 
             // ── Transition particle buffer to UAV for compute ────────────────
