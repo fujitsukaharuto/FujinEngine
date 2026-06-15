@@ -18,6 +18,7 @@
 #include "Engine/Core/CharacterMovementComponent.h"
 #include "Engine/Core/PawnComponent.h"
 #include "Engine/Core/PlayerControllerComponent.h"
+#include "Engine/Core/PlayerStartComponent.h"
 #include "Engine/Core/FootIKComponent.h"
 #include "Engine/Core/TimerDemoComponent.h"
 #include "Engine/Input/Input.h"
@@ -150,7 +151,7 @@ static void SetupTestScene() {
         // reading Input directly — controller → pawn → movement. Remove this to fall back to the
         // pawn-less path (movement reads Input itself), which behaves identically.
         auto* foxPawn = fox->AddComponent<Fujin::PawnComponent>();
-        foxPawn->AutoPossessPlayer = true;
+        foxPawn->AutoPossessPlayer = false;   // CesiumMan below is now the player; Fox is a free roaming AI pawn
 
         // Foot IK: plant the Fox's 4 paws on the ground (steps/slopes). Quadruped chains are
         // upper→lower→paw; the front "arms" and rear "legs" of the glTF Fox skeleton.
@@ -165,6 +166,71 @@ static void SetupTestScene() {
             { "b_LeftLeg01_015",    "b_LeftLeg02_016",   "b_LeftFoot01_017",  0.0f }, // rear-left
             { "b_RightLeg01_019",   "b_RightLeg02_020",  "b_RightFoot01_021", 0.0f }, // rear-right
         };
+
+        // Bone socket demo (UE5 attach-to-bone): a small cube parented to the Fox and attached to its
+        // front-right paw bone, so it rides that bone through the walk/run/idle animation (the
+        // weapon-in-hand case). The child's local transform is relative to the posed bone (mesh-space,
+        // ~100u model), so it's scaled up here then brought to world size by the Fox's 0.02 scale.
+        // Clearing AttachSocket falls back to plain parent-root attachment. Scale/offset tunable on /run.
+        {
+            auto* held  = g_scene.CreateActor("FoxHandCube");
+            auto* heldT = held->AddComponent<Fujin::TransformComponent>();
+            heldT->AttachSocket = "b_RightHand_08";                  // front-right paw bone
+            heldT->Scale        = Fujin::Vector3(10.0f, 10.0f, 10.0f);
+            auto* heldM = held->AddComponent<Fujin::MeshComponent>();
+            heldM->MeshPath     = "Resource/Meshes/cube.obj";
+            heldM->MaterialPath = "Resource/Materials/default.mat.json";
+            held->SetParent(fox);
+        }
+    }
+
+    // Playable CesiumMan — the human "Character" the player possesses (UE5 third-person template).
+    // Placed apart from the Fox so both are visible; WASD / left stick walk it on the floor while its
+    // single walk clip loops. CesiumMan is a humanoid biped (glTF is ~1.8u tall, real-world metres),
+    // so it needs no down-scaling like the Fox; tune Scale/Position on /run if needed.
+    {
+        auto* man = g_scene.CreateActor("CesiumMan");
+        auto* manT = man->AddComponent<Fujin::TransformComponent>();
+        manT->Position = Fujin::Vector3(0.0f, 0.0f, 4.0f);
+        manT->Scale    = Fujin::Vector3(1.0f, 1.0f, 1.0f);
+        auto* manM = man->AddComponent<Fujin::MeshComponent>();
+        manM->MeshPath = "Resource/Meshes/CesiumMan.gltf";
+
+        // CesiumMan ships a single (walk) clip — no Survey/Walk/Run set, so play it directly
+        // (ClipName "" = first clip found) and loop it rather than build a blend space.
+        auto* manA = man->AddComponent<Fujin::AnimationComponent>();
+        manA->Loop = true;
+
+        auto* manMove = man->AddComponent<Fujin::CharacterMovementComponent>();
+        manMove->MaxSpeed = 4.0f;
+
+        // This is the possessed player: at BeginPlay the GameMode spawns a PlayerController and
+        // possesses this pawn (controller → pawn → movement). The Fox above has AutoPossessPlayer off.
+        auto* manPawn = man->AddComponent<Fujin::PawnComponent>();
+        manPawn->AutoPossessPlayer = true;
+
+        // Foot IK: plant CesiumMan's 2 feet on the ground (steps/slopes). Biped chains are
+        // thigh→shin→foot; the toe joint (leg_joint_*_5) sits below the foot and isn't part of the
+        // two-bone IK. Pelvis is the root joint both legs hang from. Relative IK, so flat ground needs
+        // no offset tuning; per-leg Offset stays 0 unless a foot needs a fine-tune on uneven terrain.
+        auto* manIK = man->AddComponent<Fujin::FootIKComponent>();
+        manIK->PelvisBone = "Skeleton_torso_joint_1";
+        manIK->Legs = {
+            { "leg_joint_R_1", "leg_joint_R_2", "leg_joint_R_3", 0.0f }, // right leg
+            { "leg_joint_L_1", "leg_joint_L_2", "leg_joint_L_3", 0.0f }, // left leg
+        };
+    }
+
+    // PlayerStart — spawn point for the GameMode's default pawn (UE5 APlayerStart). It's an empty
+    // marker (no mesh): the GameMode spawns DefaultPawnSpawner's pawn here ONLY when no pawn is placed
+    // with AutoPossessPlayer. With CesiumMan above auto-possessed, this stays dormant; uncheck
+    // CesiumMan's "Auto Possess Player" in the Inspector (or delete it) and Play will spawn the default
+    // pawn at this transform instead. Demo only — delete to remove.
+    {
+        auto* start = g_scene.CreateActor("PlayerStart");
+        auto* startT = start->AddComponent<Fujin::TransformComponent>();
+        startT->Position = Fujin::Vector3(2.0f, 0.0f, 7.0f);
+        start->AddComponent<Fujin::PlayerStartComponent>();
     }
 
     // Demo staircase in front of the Fox (+Z is "forward"/W) so step-up is visible: 4 static steps
@@ -336,6 +402,20 @@ static bool Init() {
 
     g_scene.SetPhysicsWorld(&g_physics); // let gameplay (e.g. character ground traces) query physics
 
+    // GameMode's DefaultPawnClass analog (UE5): a factory the GameMode runs to build a pawn when the
+    // scene has no placed AutoPossessPlayer pawn, spawning it at the PlayerStart. Runtime wiring, not
+    // serialized — set here. This builds a simple cube character (mesh + movement + pawn); the Fox in
+    // SetupTestScene normally wins, so this only fires if you clear the Fox's AutoPossessPlayer flag.
+    g_scene.GetAuthGameMode().DefaultPawnSpawner = [](Fujin::Actor& a) {
+        a.AddComponent<Fujin::TransformComponent>();   // pose is set by the GameMode to the PlayerStart
+        auto* m = a.AddComponent<Fujin::MeshComponent>();
+        m->MeshPath     = "Resource/Meshes/cube.obj";
+        m->MaterialPath = "Resource/Materials/default.mat.json";
+        auto* mv = a.AddComponent<Fujin::CharacterMovementComponent>();
+        mv->MaxSpeed = 4.0f;
+        a.AddComponent<Fujin::PawnComponent>();
+    };
+
     SetupTestScene(); // always regenerate to apply latest scene changes
 
     return true;
@@ -460,6 +540,22 @@ static void Run() {
         // Apply debug camera to renderer (zero lag — camera updated this frame)
         g_sceneRenderer.CameraPos    = g_editor.GetDebugCameraPos();
         g_sceneRenderer.CameraTarget = g_editor.GetDebugCameraTarget();
+
+        // Third-person follow camera (UE5 PIE): if the GameMode's PlayerController is driving a view
+        // camera, it overrides the editor's free camera during Play. World transforms were refreshed
+        // this frame before/after the gameplay tick, so the spring arm reads the pawn's final position
+        // with no follow lag. Falls back to the debug camera when nothing is driving one.
+        if (isPlaying) {
+            for (auto& actor : g_scene.GetActors()) {
+                auto* pc = actor->GetComponent<Fujin::PlayerControllerComponent>();
+                if (pc && pc->HasViewCamera()) {
+                    pc->RefreshCamera(dt);
+                    g_sceneRenderer.CameraPos    = pc->GetCameraPos();
+                    g_sceneRenderer.CameraTarget = pc->GetCameraTarget();
+                    break;
+                }
+            }
+        }
 
         uint32_t vpX, vpY, vpW, vpH;
         g_editor.GetViewportRect(vpX, vpY, vpW, vpH);
