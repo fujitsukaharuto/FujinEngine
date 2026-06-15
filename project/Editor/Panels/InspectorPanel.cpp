@@ -34,11 +34,8 @@ void InspectorPanel::Draw(Actor* actor) {
     DrawTransform(actor);
     DrawMesh(actor);
     DrawAnimation(actor);
-    DrawLight(actor);
-    DrawCamera(actor);
     DrawParticle(actor);
-    DrawRigidbody(actor);
-    DrawCollider(actor);
+    // Light / Camera / Rigidbody / Collider now render here (Reflect-driven, incl. Enum/EnumArray).
     DrawReflectedComponents(actor);
 
     // Add Component popup
@@ -291,46 +288,9 @@ void InspectorPanel::DrawAnimation(Actor* actor) {
     ImGui::TextDisabled("Time: %.3f s", a->Time);
 }
 
-void InspectorPanel::DrawLight(Actor* actor) {
-    auto* l = actor->GetComponent<LightComponent>();
-    if (!l) return;
-    bool open = ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen);
-    if (ImGui::BeginPopupContextItem("##light_ctx")) {
-        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<LightComponent>();
-        ImGui::EndPopup();
-    }
-    if (!open || !actor->HasComponent<LightComponent>()) return;
-
-    const char* types[] = { "Directional", "Point", "Spot" };
-    int typeIndex = static_cast<int>(l->Type);
-    if (ImGui::Combo("Type", &typeIndex, types, 3))
-        l->Type = static_cast<LightType>(typeIndex);
-
-    ImGui::ColorEdit3("Color", &l->Color.x);
-    ImGui::DragFloat("Intensity", &l->Intensity, 0.1f, 0.0f, 100.0f);
-    if (l->Type != LightType::Directional)
-        ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 1000.0f);
-    if (l->Type == LightType::Spot)
-        ImGui::DragFloat("Spot Angle", &l->SpotAngle, 0.5f, 1.0f, 179.0f);
-    if (l->Type != LightType::Directional)
-        ImGui::Checkbox("Cast Shadows", &l->CastShadows);
-}
-
-void InspectorPanel::DrawCamera(Actor* actor) {
-    auto* c = actor->GetComponent<CameraComponent>();
-    if (!c) return;
-    bool open = ImGui::CollapsingHeader("Camera Component", ImGuiTreeNodeFlags_DefaultOpen);
-    if (ImGui::BeginPopupContextItem("##camera_ctx")) {
-        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<CameraComponent>();
-        ImGui::EndPopup();
-    }
-    if (!open || !actor->HasComponent<CameraComponent>()) return;
-
-    ImGui::DragFloat("FOV",       &c->FOV,      0.5f,  1.0f, 179.0f);
-    ImGui::DragFloat("Near Clip", &c->NearClip, 0.001f, 0.001f, 10.0f);
-    ImGui::DragFloat("Far Clip",  &c->FarClip,  1.0f,  1.0f, 10000.0f);
-    ImGui::Checkbox("Active", &c->IsActive);
-}
+// DrawLight / DrawCamera removed — Light/Camera now declare their fields in Reflect() and render
+// through DrawReflectedComponents (Camera fully Reflect-driven; Light is a hybrid that keeps its
+// string-keyed ToJson/FromJson but drives the Inspector via Reflect, like FootIK).
 
 void InspectorPanel::DrawParticle(Actor* actor) {
     auto* pc = actor->GetComponent<ParticleComponent>();
@@ -365,79 +325,9 @@ void InspectorPanel::DrawParticle(Actor* actor) {
     }
 }
 
-void InspectorPanel::DrawRigidbody(Actor* actor) {
-    auto* rb = actor->GetComponent<RigidbodyComponent>();
-    if (!rb) return;
-    bool open = ImGui::CollapsingHeader("Rigidbody Component", ImGuiTreeNodeFlags_DefaultOpen);
-    if (ImGui::BeginPopupContextItem("##rb_ctx")) {
-        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<RigidbodyComponent>();
-        ImGui::EndPopup();
-    }
-    if (!open || !actor->HasComponent<RigidbodyComponent>()) return;
-
-    ImGui::DragFloat("Mass",           &rb->Mass,          0.01f, 0.001f, 10000.0f);
-    ImGui::DragFloat("Restitution",    &rb->Restitution,   0.01f, 0.0f,   1.0f);
-    ImGui::DragFloat("Friction",       &rb->Friction,      0.01f, 0.0f,   1.0f);
-    ImGui::DragFloat("Linear Damping",  &rb->LinearDamping,  0.001f, 0.0f, 1.0f);
-    ImGui::DragFloat("Angular Damping", &rb->AngularDamping, 0.001f, 0.0f, 1.0f);
-    ImGui::Checkbox("Kinematic", &rb->IsKinematic);
-    ImGui::SameLine();
-    ImGui::Checkbox("Gravity",   &rb->UseGravity);
-    ImGui::TextDisabled("Velocity: %.2f %.2f %.2f", rb->Velocity.x, rb->Velocity.y, rb->Velocity.z);
-}
-
-void InspectorPanel::DrawCollider(Actor* actor) {
-    auto* col = actor->GetComponent<ColliderComponent>();
-    if (!col) return;
-    bool open = ImGui::CollapsingHeader("Collider Component", ImGuiTreeNodeFlags_DefaultOpen);
-    if (ImGui::BeginPopupContextItem("##collider_ctx")) {
-        if (ImGui::MenuItem("Remove Component")) actor->RemoveComponent<ColliderComponent>();
-        ImGui::EndPopup();
-    }
-    if (!open || !actor->HasComponent<ColliderComponent>()) return;
-
-    const char* shapes[] = { "Sphere", "AABB", "Capsule" };
-    int shapeIdx = static_cast<int>(col->Shape);
-    if (ImGui::Combo("Shape", &shapeIdx, shapes, 3))
-        col->Shape = static_cast<ColliderShape>(shapeIdx);
-
-    ImGui::DragFloat3("Offset", &col->Offset.x, 0.01f);
-    ImGui::Checkbox("Trigger", &col->IsTrigger);
-
-    switch (col->Shape) {
-    case ColliderShape::Sphere:
-        ImGui::DragFloat("Radius", &col->Radius, 0.01f, 0.001f, 1000.0f);
-        break;
-    case ColliderShape::AABB:
-        ImGui::DragFloat3("Half Extents", &col->HalfExtents.x, 0.01f, 0.001f, 1000.0f);
-        break;
-    case ColliderShape::Capsule:
-        ImGui::DragFloat("Radius",      &col->Radius,     0.01f, 0.001f, 1000.0f);
-        ImGui::DragFloat("Half Height", &col->HalfHeight, 0.01f, 0.001f, 1000.0f);
-        break;
-    }
-
-    // ── Collision channel & response ──────────────────────────────────────────
-    ImGui::Separator();
-    static const char* kChannelNames[] = {
-        "WorldStatic", "WorldDynamic", "Pawn", "Projectile", "Custom1", "Custom2" };
-    static const char* kRespNames[] = { "Ignore", "Overlap", "Block" };
-
-    int ch = static_cast<int>(col->Channel);
-    if (ImGui::Combo("Channel", &ch, kChannelNames, kChannelCount))
-        col->Channel = static_cast<CollisionChannel>(ch);
-
-    if (ImGui::TreeNode("Collision Responses")) {
-        for (int i = 0; i < kChannelCount; ++i) {
-            int r = static_cast<int>(col->Responses[static_cast<size_t>(i)]);
-            ImGui::PushID(i);
-            if (ImGui::Combo(kChannelNames[i], &r, kRespNames, 3))
-                col->Responses[static_cast<size_t>(i)] = static_cast<CollisionResponse>(r);
-            ImGui::PopID();
-        }
-        ImGui::TreePop();
-    }
-}
+// DrawRigidbody / DrawCollider removed — both now declare their fields in Reflect() (Collider uses
+// the new Enum / EnumArray visitor methods for Shape, Channel and the per-channel response matrix)
+// and render through DrawReflectedComponents.
 
 // File-local property visitors backing the generic reflection Inspector.
 namespace {
@@ -451,6 +341,9 @@ struct CountVisitor : IPropertyVisitor {
     void Vec3 (const char*, const char*, Vector3*, float)             override { ++count; }
     void Color(const char*, const char*, Vector3*)                    override { ++count; }
     void Text (const char*, const char*, std::string*)                override { ++count; }
+    void Enum (const char*, const char*, int*, const char* const*, int) override { ++count; }
+    void EnumArray(const char*, const char*, int*, int, const char* const*,
+                   const char* const*, int)                           override { ++count; }
 };
 
 // Renders each property with the matching ImGui widget, labelled by `label` (the `key` — the JSON
@@ -469,6 +362,19 @@ struct ImGuiVisitor : IPropertyVisitor {
         char buf[256] = {};
         strncpy_s(buf, sizeof(buf), v->c_str(), _TRUNCATE);
         if (ImGui::InputText(n, buf, sizeof(buf))) *v = buf;
+    }
+    void Enum(const char*, const char* n, int* v, const char* const* names, int count) override {
+        ImGui::Combo(n, v, names, count);
+    }
+    void EnumArray(const char*, const char* n, int* base, int elemCount,
+                   const char* const* elemLabels, const char* const* optionNames, int optionCount) override {
+        if (!ImGui::TreeNode(n)) return;
+        for (int i = 0; i < elemCount; ++i) {
+            ImGui::PushID(i);
+            ImGui::Combo(elemLabels[i], &base[i], optionNames, optionCount);
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
     }
 };
 

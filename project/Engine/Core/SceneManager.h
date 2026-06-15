@@ -16,6 +16,11 @@ class PhysicsWorld;
 class SceneManager {
 public:
     Actor* CreateActor(const std::string& name = "Actor");
+    // Deep-copy an actor via its JSON round-trip (Reflect-driven serialization is the single source of
+    // truth, so the duplicate gets every reflected property for free). The copy gets a fresh id, the
+    // same parent (a sibling), and — if it has a Transform — a small position nudge so it's visible.
+    // Runtime-only state (callbacks, velocities, possession) resets to defaults, as for a fresh load.
+    Actor* DuplicateActor(Actor* src);
     void   DestroyActor(Actor* actor);
     void   Clear();
 

@@ -24,6 +24,18 @@ public:
     virtual void Vec3 (const char* key, const char* label, Vector3* v, float speed = 0.01f) = 0;
     virtual void Color(const char* key, const char* label, Vector3* rgb) = 0;            // RGB color picker
     virtual void Text (const char* key, const char* label, std::string* v) = 0;
+
+    // Enum stored as an int index, edited via a dropdown of `names` (count entries). Because component
+    // enums vary in underlying type (plain enum / enum class : uint8_t), Reflect() bridges through a
+    // local int: read the enum into it, call Enum(&tmp,...), then write tmp back to the field.
+    virtual void Enum(const char* key, const char* label, int* v, const char* const* names, int count) = 0;
+
+    // Fixed-size array of enum indices (e.g. a per-channel collision response matrix). `base` points at
+    // elemCount contiguous ints; `elemLabels` names each row, `optionNames`/optionCount the dropdown.
+    // Reflect() bridges a uint8_t/enum array through a local int[] the same way Enum does.
+    virtual void EnumArray(const char* key, const char* label, int* base, int elemCount,
+                           const char* const* elemLabels,
+                           const char* const* optionNames, int optionCount) = 0;
 };
 
 } // namespace Fujin

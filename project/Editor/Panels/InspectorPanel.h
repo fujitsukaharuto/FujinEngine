@@ -23,12 +23,11 @@ public:
 private:
     void DrawTransform(Actor* actor);
     void DrawMesh(Actor* actor);
-    void DrawLight(Actor* actor);
     void DrawAnimation(Actor* actor);
-    void DrawCamera(Actor* actor);
     void DrawParticle(Actor* actor);
-    void DrawRigidbody(Actor* actor);
-    void DrawCollider(Actor* actor);
+    // Light/Camera/Rigidbody/Collider migrated to Reflect() → DrawReflectedComponents (bespoke
+    // DrawLight/DrawCamera/DrawRigidbody/DrawCollider removed). Transform/Mesh/Animation/Particle
+    // keep bespoke draws (Euler cache + undo / material sub-editor + drag-drop / runtime info).
     // Generic, reflection-driven panel for any component that overrides Component::Reflect().
     // Replaces per-type DrawXxx for gameplay/script components — no edits here to add a new one.
     void DrawReflectedComponents(Actor* actor);

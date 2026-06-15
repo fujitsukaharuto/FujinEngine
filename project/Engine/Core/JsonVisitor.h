@@ -23,6 +23,13 @@ struct JsonWriteVisitor : IPropertyVisitor {
     void Vec3 (const char* key, const char*, Vector3* v, float)             override { j[key] = { v->x, v->y, v->z }; }
     void Color(const char* key, const char*, Vector3* v)                    override { j[key] = { v->x, v->y, v->z }; }
     void Text (const char* key, const char*, std::string* v)                override { j[key] = *v; }
+    void Enum (const char* key, const char*, int* v, const char* const*, int) override { j[key] = *v; }
+    void EnumArray(const char* key, const char*, int* base, int n,
+                   const char* const*, const char* const*, int) override {
+        nlohmann::json arr = nlohmann::json::array();
+        for (int i = 0; i < n; ++i) arr.push_back(base[i]);
+        j[key] = std::move(arr);
+    }
 };
 
 // Reads each reflected property from `j` by its key. Missing keys leave the field at its current
@@ -37,6 +44,14 @@ struct JsonReadVisitor : IPropertyVisitor {
     void Text (const char* key, const char*, std::string* v)                override { *v = j.value(key, *v); }
     void Vec3 (const char* key, const char*, Vector3* v, float)             override { ReadVec(key, v); }
     void Color(const char* key, const char*, Vector3* v)                    override { ReadVec(key, v); }
+    void Enum (const char* key, const char*, int* v, const char* const*, int) override { *v = j.value(key, *v); }
+    void EnumArray(const char* key, const char*, int* base, int n,
+                   const char* const*, const char* const*, int) override {
+        auto it = j.find(key);
+        if (it == j.end() || !it->is_array()) return;
+        for (int i = 0; i < n && i < static_cast<int>(it->size()); ++i)
+            base[i] = (*it)[i].get<int>();
+    }
 
 private:
     void ReadVec(const char* key, Vector3* v) {

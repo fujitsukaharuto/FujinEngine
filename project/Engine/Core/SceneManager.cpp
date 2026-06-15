@@ -1,5 +1,7 @@
 #include "SceneManager.h"
+#include "Actor.h"
 #include "TransformComponent.h"
+#include <json.hpp>
 #include <algorithm>
 
 namespace Fujin {
@@ -65,6 +67,18 @@ Actor* SceneManager::CreateActor(const std::string& name) {
     m_byId[ptr->GetId()] = ptr;
     m_actors.push_back(std::move(actor));
     return ptr;
+}
+
+Actor* SceneManager::DuplicateActor(Actor* src) {
+    if (!src) return nullptr;
+    nlohmann::json j;
+    src->ToJson(j);                    // Reflect-driven (bespoke for Mesh/Light/Transform/etc.)
+    Actor* dup = CreateActor(src->GetName());
+    dup->FromJson(j);                  // recreates + restores components (and the name) on the new id
+    dup->SetParent(src->GetParent());  // make it a sibling — FromJson doesn't resolve parent links
+    if (auto* tc = dup->GetComponent<TransformComponent>())
+        tc->Position += Vector3(0.5f, 0.0f, 0.5f);  // nudge so the copy isn't hidden behind the source
+    return dup;
 }
 
 void SceneManager::DestroyActor(Actor* actor) {

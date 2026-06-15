@@ -15,6 +15,10 @@ void SceneHierarchyPanel::Draw(SceneManager& scene) {
         m_selected = a;
     }
     ImGui::SameLine();
+    if (ImGui::Button("Duplicate") && m_selected) {
+        m_selected = scene.DuplicateActor(m_selected);   // select the new copy
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Delete") && m_selected) {
         scene.DestroyActor(m_selected);
         m_selected = nullptr;

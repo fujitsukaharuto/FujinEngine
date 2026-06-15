@@ -37,24 +37,6 @@ Vector3 RigidbodyComponent::ApplyInvInertiaWorld(const Quaternion& rot, const Ve
         r.m[2][0]*local.x + r.m[2][1]*local.y + r.m[2][2]*local.z);
 }
 
-void RigidbodyComponent::ToJson(nlohmann::json& j) const {
-    j["mass"]           = Mass;
-    j["restitution"]    = Restitution;
-    j["friction"]       = Friction;
-    j["linearDamping"]  = LinearDamping;
-    j["angularDamping"] = AngularDamping;
-    j["isKinematic"]    = IsKinematic;
-    j["useGravity"]     = UseGravity;
-}
-
-void RigidbodyComponent::FromJson(const nlohmann::json& j) {
-    if (j.contains("mass"))           Mass           = j["mass"].get<float>();
-    if (j.contains("restitution"))    Restitution    = j["restitution"].get<float>();
-    if (j.contains("friction"))       Friction       = j["friction"].get<float>();
-    if (j.contains("linearDamping"))  LinearDamping  = j["linearDamping"].get<float>();
-    if (j.contains("angularDamping")) AngularDamping = j["angularDamping"].get<float>();
-    if (j.contains("isKinematic"))    IsKinematic    = j["isKinematic"].get<bool>();
-    if (j.contains("useGravity"))     UseGravity     = j["useGravity"].get<bool>();
-}
+// ToJson/FromJson now come from Component's Reflect-driven defaults (see RigidbodyComponent::Reflect).
 
 } // namespace Fujin

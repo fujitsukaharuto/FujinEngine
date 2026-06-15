@@ -1,5 +1,6 @@
 #pragma once
 #include "Component.h"
+#include "PropertyVisitor.h"
 #include "Engine/Math/Math.h"
 #include <functional>
 #include <array>
@@ -72,8 +73,38 @@ public:
     std::function<void(Actor*)>           OnEndOverlap;    // fires once on overlap end
 
     const char* GetTypeName() const override { return "ColliderComponent"; }
-    void ToJson(nlohmann::json& j) const override;
-    void FromJson(const nlohmann::json& j) override;
+
+    // Reflect drives Inspector + save/load (Component's default ToJson/FromJson). Keys/types verbatim
+    // from the old serializer: enums as int (shape/channel), responses as an int array. Shape-specific
+    // fields (radius/halfExtents/halfHeight) are all shown rather than switched on Shape — the old
+    // bespoke draw hid the irrelevant ones, a minor UX trade for the single-source-of-truth model.
+    void Reflect(IPropertyVisitor& v) override {
+        static const char* kShapeNames[]   = { "Sphere", "AABB", "Capsule" };
+        static const char* kChannelNames[] = { "WorldStatic", "WorldDynamic", "Pawn",
+                                               "Projectile", "Custom1", "Custom2" };
+        static const char* kRespNames[]    = { "Ignore", "Overlap", "Block" };
+
+        int shape = static_cast<int>(Shape);
+        v.Enum("shape", "Shape", &shape, kShapeNames, 3);
+        Shape = static_cast<ColliderShape>(shape);
+
+        v.Vec3 ("offset",      "Offset",      &Offset, 0.01f);
+        v.Bool ("isTrigger",   "Trigger",     &IsTrigger);
+        v.Float("radius",      "Radius",      &Radius,     0.01f, 0.001f, 1000.0f);
+        v.Vec3 ("halfExtents", "Half Extents",&HalfExtents, 0.01f);
+        v.Float("halfHeight",  "Half Height", &HalfHeight, 0.01f, 0.001f, 1000.0f);
+
+        int channel = static_cast<int>(Channel);
+        v.Enum("channel", "Channel", &channel, kChannelNames, kChannelCount);
+        Channel = static_cast<CollisionChannel>(channel);
+
+        int resp[kChannelCount];
+        for (int i = 0; i < kChannelCount; ++i) resp[i] = static_cast<int>(Responses[static_cast<size_t>(i)]);
+        v.EnumArray("responses", "Collision Responses", resp, kChannelCount,
+                    kChannelNames, kRespNames, 3);
+        for (int i = 0; i < kChannelCount; ++i)
+            Responses[static_cast<size_t>(i)] = static_cast<CollisionResponse>(resp[i]);
+    }
 };
 
 } // namespace Fujin

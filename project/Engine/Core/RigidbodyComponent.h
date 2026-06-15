@@ -1,5 +1,6 @@
 #pragma once
 #include "Component.h"
+#include "PropertyVisitor.h"
 #include "Engine/Math/Math.h"
 
 namespace Fujin {
@@ -46,8 +47,17 @@ public:
     Vector3 ApplyInvInertiaWorld(const Quaternion& rot, const Vector3& v) const;
 
     const char* GetTypeName() const override { return "RigidbodyComponent"; }
-    void ToJson(nlohmann::json& j) const override;
-    void FromJson(const nlohmann::json& j) override;
+    // Reflect drives Inspector + save/load. Keys verbatim from the old serializer. Runtime state
+    // (Velocity / AngularVelocity / sleep / inertia / accumulators) is intentionally not reflected.
+    void Reflect(IPropertyVisitor& v) override {
+        v.Float("mass",           "Mass",            &Mass,           0.01f,  0.001f, 10000.0f);
+        v.Float("restitution",    "Restitution",     &Restitution,    0.01f,  0.0f,   1.0f);
+        v.Float("friction",       "Friction",        &Friction,       0.01f,  0.0f,   1.0f);
+        v.Float("linearDamping",  "Linear Damping",  &LinearDamping,  0.001f, 0.0f,   1.0f);
+        v.Float("angularDamping", "Angular Damping", &AngularDamping, 0.001f, 0.0f,   1.0f);
+        v.Bool ("isKinematic",    "Kinematic",       &IsKinematic);
+        v.Bool ("useGravity",     "Gravity",         &UseGravity);
+    }
 
     Vector3 m_forceAccum  = {};
     Vector3 m_torqueAccum = {};

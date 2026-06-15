@@ -1,5 +1,6 @@
 #pragma once
 #include "Component.h"
+#include "PropertyVisitor.h"
 
 namespace Fujin {
 
@@ -11,8 +12,14 @@ public:
     bool  IsActive = true;
 
     const char* GetTypeName() const override { return "CameraComponent"; }
-    void ToJson(nlohmann::json& j)        const override;
-    void FromJson(const nlohmann::json& j)      override;
+    // Reflect drives Inspector + save/load (Component's default ToJson/FromJson). Keys verbatim from
+    // the old hand-written serializer (fov/nearClip/farClip/isActive) so existing scenes still load.
+    void Reflect(IPropertyVisitor& v) override {
+        v.Float("fov",      "FOV",       &FOV,      0.5f,   1.0f, 179.0f);
+        v.Float("nearClip", "Near Clip", &NearClip, 0.001f, 0.001f, 10.0f);
+        v.Float("farClip",  "Far Clip",  &FarClip,  1.0f,   1.0f, 10000.0f);
+        v.Bool ("isActive", "Active",    &IsActive);
+    }
 };
 
 } // namespace Fujin
