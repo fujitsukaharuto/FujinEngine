@@ -17,7 +17,8 @@ cbuffer PassCB : register(b0) {
 };
 
 cbuffer SubUVCB : register(b1) {
-    int SubUVCols; int SubUVRows; int HasTexture; int _su;
+    int SubUVCols; int SubUVRows; int HasTexture; int Facing;   // Facing: 0=Camera 1=Velocity 2=Stretch
+    float VelStretch; int _su1; int _su2; int _su3;
 };
 
 float2 SubUV(float2 uv, float ageFrac) {
@@ -55,14 +56,27 @@ VSOut main(uint vertID : SV_VertexID, uint instID : SV_InstanceID) {
     float sz = (p.lifetime > 0) ? p.size * 0.5 : 0.0;
 
     float2 corner = QuadCorner[vertID];
-    float  s = sin(p.rot);
-    float  c = cos(p.rot);
-    float2 rotC = float2(corner.x * c - corner.y * s,
-                         corner.x * s + corner.y * c);
+
+    // Velocity in the camera (screen) plane, used by the velocity facing modes.
+    float2 velS = float2(dot(p.vel, CamRight), dot(p.vel, CamUp));
+    float  slen = length(velS);
+
+    float2 off;   // quad offset in the (CamRight, CamUp) basis, in half-size units
+    if (Facing > 0 && slen > 1e-4) {
+        float2 vdir  = velS / slen;
+        float2 vperp = float2(-vdir.y, vdir.x);
+        float  lenScale = (Facing == 2) ? (1.0 + length(p.vel) * VelStretch) : 1.0;
+        off = corner.x * vperp + corner.y * vdir * lenScale;
+    } else {
+        float s = sin(p.rot);
+        float c = cos(p.rot);
+        off = float2(corner.x * c - corner.y * s,
+                     corner.x * s + corner.y * c);
+    }
 
     float3 worldPos = p.pos
-                    + CamRight * (rotC.x * sz)
-                    + CamUp    * (rotC.y * sz);
+                    + CamRight * (off.x * sz)
+                    + CamUp    * (off.y * sz);
 
     float ageFrac = (p.lifetime > 0) ? (p.age / p.lifetime) : 0.0;
     o.pos   = mul(float4(worldPos, 1.0), ViewProj);

@@ -1082,14 +1082,29 @@ void SceneRenderer::UpdateParticles(const SceneManager& scene, float dt) {
         for (auto& em : pc->GetEmitters()) {
             em.Update(dt, worldPos);
 
-            // Light Renderer: emit one dynamic point light per particle (CPU emitters only — GPU
+            // Light Renderer: emit dynamic point lights from particles (CPU emitters only — GPU
             // particle positions aren't read back), capped at LightMaxCount per emitter.
             const EmitterDesc& d = em.GetDesc();
             if (!d.LightRenderer || d.Simulation != SimMode::CPU) continue;
-            int budget = (std::max)(0, d.LightMaxCount);
+            int maxLights = (std::max)(0, d.LightMaxCount);
+            if (maxLights == 0) continue;
+
+            // Stride-sample active particles evenly instead of taking the first N: lights spread
+            // across the whole effect (not clustered at the pool head) and stay far more stable as
+            // particles recycle, which kills the popping the naive "first N" selection produced.
+            int active = 0;
+            for (const auto& p : em.GetParticles()) if (p.Active) ++active;
+            if (active == 0) continue;
+            int stride = (active + maxLights - 1) / maxLights;   // ceil(active / maxLights), >=1
+
+            int seen = 0, emitted = 0;
             for (const auto& p : em.GetParticles()) {
-                if (budget <= 0) break;
                 if (!p.Active) continue;
+                bool pick = (seen % stride) == 0;
+                ++seen;
+                if (!pick || emitted >= maxLights) continue;
+                ++emitted;
+
                 ParticleLight pl;
                 // Local-space particles live in emitter space; bring them to world.
                 if (d.LocalSpace) {
@@ -1098,14 +1113,15 @@ void SceneRenderer::UpdateParticles(const SceneManager& scene, float dt) {
                 } else {
                     pl.pos = p.Position;
                 }
-                Vector3 base = d.LightUseParticleColor
+                pl.color = d.LightUseParticleColor
                     ? Vector3(p.Color.x, p.Color.y, p.Color.z) : d.LightColor;
-                pl.color     = base;
                 // Fade the light with the particle's alpha so lights die out with the particle.
                 pl.intensity = d.LightIntensity * p.Color.w;
-                pl.range     = d.LightRange;
+                // Radius follows the particle's size when LightRadiusScale>0 (Niagara Radius Scale),
+                // else a fixed LightRange.
+                pl.range = (d.LightRadiusScale > 0.0f)
+                    ? (std::max)(p.Size * d.LightRadiusScale, 0.01f) : d.LightRange;
                 m_particleLights.push_back(pl);
-                --budget;
             }
         }
     }

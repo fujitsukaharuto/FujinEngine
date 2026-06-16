@@ -147,6 +147,12 @@ void Emitter::Update(float dt, const Vector3& worldPos) {
             }
         }
 
+        // Wind: drag the velocity toward the wind velocity (particles get carried by the wind).
+        if (upd.UseWind) {
+            float k = std::min(1.0f, upd.WindDrag * dt);   // stable implicit-ish blend
+            p.Velocity += (upd.WindVelocity - p.Velocity) * k;
+        }
+
         // Vortex force: swirl tangentially around the axis line through VortexCenter, plus an
         // optional inward/outward pull (tornado). Matches ParticleGPU_Update.CS.hlsl.
         if (upd.UseVortex) {

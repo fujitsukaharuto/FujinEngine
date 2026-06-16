@@ -9,6 +9,10 @@ enum class EmitterRenderMode { Sprite, Beam, Ribbon, Mesh };
 enum class EmitterShape      { Point, Sphere, Cone, Box };
 enum class SimMode           { CPU, GPU };
 enum class BlendMode         { AlphaBlend, Additive };
+// Sprite Renderer facing (Niagara "Alignment"): Camera = classic billboard; Velocity = the quad's
+// long axis aligns to the particle's screen-space velocity; VelocityStretch = same, stretched along
+// velocity by speed (motion streaks — sparks/rain). Velocity modes ignore per-particle Rotation.
+enum class SpriteFacing      { Camera, Velocity, VelocityStretch };
 
 // ---- Particle runtime state ------------------------------------------------
 
@@ -74,6 +78,12 @@ struct UpdateModule {
     Vector3 AttractorPos        = { 0.0f, 0.0f, 0.0f };
     float   AttractorStrength   = 5.0f;
     float   AttractorRadius     = 10.0f;
+    // Wind force (Niagara "Wind"): drag the particle's velocity toward a constant wind velocity, so
+    // particles get carried by the wind (distinct from gravity's constant pull). WindDrag = how fast
+    // they reach wind speed (per second). CPU + GPU.
+    bool    UseWind        = false;
+    Vector3 WindVelocity   = { 1.0f, 0.0f, 0.0f };
+    float   WindDrag       = 1.0f;
     // Vortex force (Niagara "Vortex Velocity"): swirl tangentially around an axis line through a
     // center point, with optional inward pull. Strength = tangential accel; Inward>0 sucks toward
     // the axis (tornado), <0 pushes out. Radius = linear falloff distance (0 = no falloff). CPU + GPU.
@@ -103,6 +113,13 @@ struct BeamModule {
     float   NoiseAmp   = 0.2f;    // lateral noise amplitude
     float   NoiseSpeed = 3.0f;    // noise animation speed
     Vector4 Color      = { 0.5f, 0.8f, 1.0f, 1.0f };
+};
+
+// Shared Beam/Ribbon trail texturing. Uses the emitter's SpriteTexturePath as the strip texture
+// (empty = plain colored strip). U runs along the length, V across the width.
+struct TrailModule {
+    float UVTiling = 1.0f;   // texture repeats along the length
+    float UVScroll = 0.0f;   // U scroll speed (energy-flow animation), world units/sec
 };
 
 // ---- GPU spawn data (CPU→GPU upload, matches HLSL GPUSpawnData, 80 bytes) --
@@ -152,6 +169,9 @@ struct EmitterDesc {
     bool               LightRenderer    = false;
     float              LightIntensity   = 2.0f;
     float              LightRange       = 3.0f;
+    // Radius from particle size (Niagara "Radius Scale"): 0 = use the fixed LightRange; >0 makes each
+    // light's radius = particle.Size * LightRadiusScale, so the light grows/shrinks with its particle.
+    float              LightRadiusScale = 0.0f;
     int                LightMaxCount    = 8;
     bool               LightUseParticleColor = true;
     Vector3            LightColor       = { 1.0f, 1.0f, 1.0f };
@@ -162,6 +182,11 @@ struct EmitterDesc {
     int                SubUVCols = 1;
     int                SubUVRows = 1;
 
+    // Sprite facing / alignment (CPU + GPU). VelStretch is the per-speed length multiplier used by
+    // SpriteFacing::VelocityStretch (length = size * (1 + speed * VelStretch)).
+    SpriteFacing       Facing    = SpriteFacing::Camera;
+    float              VelStretch = 0.05f;
+
     // Mesh render mode: render this mesh per particle (unlit/emissive, color-tinted).
     std::string        MeshPath;
 
@@ -169,6 +194,7 @@ struct EmitterDesc {
     InitModule   Init;
     UpdateModule Update;
     BeamModule   Beam;      // used when RenderMode == Beam
+    TrailModule  Trail;     // used when RenderMode == Beam or Ribbon (texture/UV)
 
     void ToJson(nlohmann::json& j) const;
     void FromJson(const nlohmann::json& j);

@@ -37,6 +37,7 @@ static const char* s_renderModes[] = { "Sprite", "Beam", "Ribbon", "Mesh" };
 static const char* s_simModes[]    = { "CPU", "GPU" };
 static const char* s_blendModes[]  = { "Alpha Blend", "Additive" };
 static const char* s_shapes[]      = { "Point", "Sphere", "Cone", "Box" };
+static const char* s_facing[]      = { "Camera", "Velocity", "Velocity Stretch" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -357,6 +358,34 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-FLT_MIN);
     };
+    // Shared texture + UV scroll/tiling block for Beam/Ribbon renderers.
+    auto DrawTrailTexUI = [&](EmitterDesc& dd) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Texture / UV");
+        ImGui::Separator();
+        BeginProps();
+        Row("Texture");
+        {
+            char texBuf[256];
+            strncpy_s(texBuf, dd.SpriteTexturePath.c_str(), sizeof(texBuf) - 1);
+            if (ImGui::InputText("##trtex", texBuf, sizeof(texBuf)))
+                dd.SpriteTexturePath = texBuf;
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                    dd.SpriteTexturePath = static_cast<const char*>(payload->Data);
+                ImGui::EndDragDropTarget();
+            }
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("空=単色帯。U=長さ方向 / V=幅方向。Content Browserからドラッグ可");
+        Row("UV Tiling");
+        ImGui::DragFloat("##trtile", &dd.Trail.UVTiling, 0.05f, 0.0f, 64.0f, "%.2f");
+        Row("UV Scroll");
+        ImGui::DragFloat("##trscr", &dd.Trail.UVScroll, 0.02f, -20.0f, 20.0f, "%.2f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("U方向スクロール速度(エネルギー流れ)。0で静止");
+        EndProps();
+    };
 
     switch (m_selectedGroup) {
 
@@ -612,6 +641,24 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
         EndProps();
 
         ImGui::Spacing();
+        ImGui::TextDisabled("Wind");
+        ImGui::Separator();
+        BeginProps();
+        Row("Enable");
+        ImGui::Checkbox("##wnd", &d.Update.UseWind);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("風速へ速度を引き込む(粒子が風で流される)。CPU/GPU両対応");
+        if (d.Update.UseWind) {
+            Row("Velocity");
+            ImGui::DragFloat3("##wndv", &d.Update.WindVelocity.x, 0.1f);
+            Row("Drag");
+            ImGui::DragFloat("##wndd", &d.Update.WindDrag, 0.05f, 0.0f, 20.0f, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("風速に到達する速さ(/秒)");
+        }
+        EndProps();
+
+        ImGui::Spacing();
         ImGui::TextDisabled("Vortex");
         ImGui::Separator();
         BeginProps();
@@ -684,6 +731,18 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             ImGui::DragInt("##subc", &d.SubUVCols, 0.1f, 1, 16);
             Row("SubUV Rows");
             ImGui::DragInt("##subr", &d.SubUVRows, 0.1f, 1, 16);
+            int facing = (int)d.Facing;
+            Row("Facing");
+            if (ImGui::Combo("##facing", &facing, s_facing, 3))
+                d.Facing = (SpriteFacing)facing;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Camera=ビルボード / Velocity=速度方向に整列 / Stretch=速度で伸縮(火花・雨)\nVelocity系は粒子Rotationを無視");
+            if (d.Facing == SpriteFacing::VelocityStretch) {
+                Row("Stretch");
+                ImGui::DragFloat("##vstr", &d.VelStretch, 0.005f, 0.0f, 5.0f, "%.3f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("長さ = サイズ×(1 + 速さ×この値)");
+            }
             EndProps();
             ImGui::TextDisabled("Cols×Rows>1 で寿命に沿ってコマ送り");
             ImGui::Spacing();
@@ -731,12 +790,14 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             Row("Colour");
             ImGui::ColorEdit4("##bc", &d.Beam.Color.x);
             EndProps();
+            DrawTrailTexUI(d);
         }
         else {
             ImGui::TextColored(ImVec4(0.75f,0.45f,0.92f,1.0f), "Ribbon Renderer");
             ImGui::Separator();
             ImGui::TextDisabled("Width driven by particle Size.");
             ImGui::TextDisabled("Colour driven by Initialize/Update.");
+            DrawTrailTexUI(d);
         }
 
         // Light Renderer — applies to any render mode (CPU emitters only).
@@ -755,6 +816,12 @@ void EffectEditorPanel::DrawParameters(Emitter& em) {
             ImGui::DragFloat("##lri", &d.LightIntensity, 0.05f, 0.0f, 50.0f, "%.2f");
             Row("Range");
             ImGui::DragFloat("##lrr", &d.LightRange, 0.05f, 0.0f, 100.0f, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Radius Scale=0 のとき使われる固定の到達距離");
+            Row("Radius Scale");
+            ImGui::DragFloat("##lrs", &d.LightRadiusScale, 0.05f, 0.0f, 50.0f, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(">0 で半径=粒子サイズ×この値(Niagara Radius Scale)\n0 で固定 Range を使用");
             Row("Max Lights");
             ImGui::DragInt("##lrm", &d.LightMaxCount, 0.2f, 0, 256);
             if (ImGui::IsItemHovered())

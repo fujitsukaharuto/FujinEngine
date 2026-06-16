@@ -20,6 +20,11 @@ static inline Vector3 XformPoint(const Matrix4x4& m, const Vector3& p) {
     Vector4 r = m * Vector4(p.x, p.y, p.z, 1.0f);
     return Vector3(r.x, r.y, r.z);
 }
+// Transform a direction (w=0) by a world matrix — local-space particle velocity → world (no translation).
+static inline Vector3 XformDir(const Matrix4x4& m, const Vector3& v) {
+    Vector4 r = m * Vector4(v.x, v.y, v.z, 0.0f);
+    return Vector3(r.x, r.y, r.z);
+}
 
 // ── Utility: create committed upload buffer and return persistent map ─────────
 static bool CreateUploadBuffer(ID3D12Device* dev, UINT64 size,
@@ -52,25 +57,29 @@ static bool MakeRS(ID3D12Device* dev, ComPtr<ID3D12RootSignature>& rs) {
     params[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
     params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[1].Constants.ShaderRegister  = 1;
-    params[1].Constants.Num32BitValues  = 4;
+    params[1].Constants.Num32BitValues  = 6;   // SubUV(3) + Facing + VelStretch + pad
     params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     params[2].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[2].DescriptorTable.NumDescriptorRanges = 1;
     params[2].DescriptorTable.pDescriptorRanges   = &texRange;
     params[2].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_STATIC_SAMPLER_DESC samp = {};
-    samp.Filter   = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    samp.AddressU = samp.AddressV = samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    samp.MaxLOD   = D3D12_FLOAT32_MAX;
-    samp.ShaderRegister   = 0;
-    samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC samp[2] = {};
+    samp[0].Filter   = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samp[0].AddressU = samp[0].AddressV = samp[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samp[0].MaxLOD   = D3D12_FLOAT32_MAX;
+    samp[0].ShaderRegister   = 0;
+    samp[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    // s1: wrap sampler for tiled/scrolling beam & ribbon UVs.
+    samp[1] = samp[0];
+    samp[1].AddressU = samp[1].AddressV = samp[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samp[1].ShaderRegister   = 1;
 
     D3D12_ROOT_SIGNATURE_DESC desc = {};
     desc.NumParameters     = 3;
     desc.pParameters       = params;
-    desc.NumStaticSamplers = 1;
-    desc.pStaticSamplers   = &samp;
+    desc.NumStaticSamplers = 2;
+    desc.pStaticSamplers   = samp;
     desc.Flags             = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob, err;
@@ -208,12 +217,13 @@ bool ParticlePass::CreateSpritePipeline(GraphicsDevice& gfx) {
         // Slot 0: per-vertex
         { "POSITION",  0, DXGI_FORMAT_R32G32_FLOAT,          0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
         { "TEXCOORD",  0, DXGI_FORMAT_R32G32_FLOAT,          0,  8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
-        // Slot 1: per-instance (InstanceVert: 48 bytes)
+        // Slot 1: per-instance (InstanceVert: 60 bytes)
         { "INST_POS",  0, DXGI_FORMAT_R32G32B32_FLOAT,       1,  0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_SIZE", 0, DXGI_FORMAT_R32_FLOAT,             1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_ROT",  0, DXGI_FORMAT_R32_FLOAT,             1, 16, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_PAD",  0, DXGI_FORMAT_R32G32B32_FLOAT,       1, 20, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_COL",  0, DXGI_FORMAT_R32G32B32A32_FLOAT,    1, 32, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INST_VEL",  0, DXGI_FORMAT_R32G32B32_FLOAT,       1, 48, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
     };
 
     D3D12_RASTERIZER_DESC rast = {};
@@ -230,7 +240,7 @@ bool ParticlePass::CreateSpritePipeline(GraphicsDevice& gfx) {
     pso.pRootSignature        = m_spriteRS.Get();
     pso.VS                    = { vs->GetBufferPointer(), vs->GetBufferSize() };
     pso.PS                    = { ps->GetBufferPointer(), ps->GetBufferSize() };
-    pso.InputLayout           = { layout, 7 };
+    pso.InputLayout           = { layout, 8 };
     pso.RasterizerState       = rast;
     pso.BlendState            = AlphaBlendDesc();
     pso.DepthStencilState     = ds;
@@ -273,7 +283,7 @@ bool ParticlePass::CreateMeshPipeline(GraphicsDevice& gfx) {
         { "NORMAL",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
         { "TANGENT",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
         { "TEXCOORD",  0, DXGI_FORMAT_R32G32_FLOAT,       0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,   0 },
-        // Slot 1: per-instance (InstanceVert: 48 bytes)
+        // Slot 1: per-instance (InstanceVert: 60 bytes; mesh ignores the trailing vel)
         { "INST_POS",  0, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_SIZE", 0, DXGI_FORMAT_R32_FLOAT,          1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
         { "INST_ROT",  0, DXGI_FORMAT_R32_FLOAT,          1, 16, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
@@ -488,7 +498,7 @@ bool ParticlePass::CreateGPUDrawPipeline(GraphicsDevice& gfx) {
     params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
     params[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[2].Constants.ShaderRegister  = 1;
-    params[2].Constants.Num32BitValues  = 4;
+    params[2].Constants.Num32BitValues  = 6;   // SubUV(3) + Facing + VelStretch + pad
     params[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     params[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[3].DescriptorTable.NumDescriptorRanges = 1;
@@ -642,8 +652,8 @@ void ParticlePass::Execute(ID3D12GraphicsCommandList* cmd,
     // CPU particles
     DrawSprites(cmd, gfx, frameIndex, scene, texMgr);
     DrawMeshParticles(cmd, frameIndex, scene, geoMgr);
-    uint32_t beamVtxUsed = DrawBeams(cmd, frameIndex, scene, camPos, elapsed);
-    DrawRibbons(cmd, frameIndex, scene, camPos, beamVtxUsed);
+    uint32_t beamVtxUsed = DrawBeams(cmd, gfx, frameIndex, scene, texMgr, camPos, elapsed);
+    DrawRibbons(cmd, gfx, frameIndex, scene, texMgr, camPos, elapsed, beamVtxUsed);
 }
 
 // ── Sprite draw ──────────────────────────────────────────────────────────────
@@ -655,7 +665,7 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
     // Per-emitter draw items: each emitter has its own texture + SubUV grid, so it can't be batched
     // with others into a single draw. We pack all emitters' instances into one buffer (running
     // offset) and issue one DrawIndexedInstanced per emitter with its texture + SubUV root constants.
-    struct Item { uint32_t offset, count; BlendMode blend; uint32_t texSlot; int cols, rows, hasTex; };
+    struct Item { uint32_t offset, count; BlendMode blend; uint32_t texSlot; int cols, rows, hasTex, facing; float velStretch; };
     std::vector<Item> items;
     uint32_t total = 0;
     for (auto& actorPtr : scene.GetActors()) {
@@ -672,6 +682,8 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
                 if (!p.Active || total >= MAX_SPRITES) continue;
                 // Local-space emitters store positions relative to the emitter; transform to world.
                 Vector3 wp = d.LocalSpace ? XformPoint(world, p.Position) : p.Position;
+                // Facing modes need world velocity (rotate the local velocity for local-space emitters).
+                Vector3 wv = d.LocalSpace ? XformDir(world, p.Velocity) : p.Velocity;
                 auto& iv  = dst[total];
                 iv.pos[0] = wp.x; iv.pos[1] = wp.y; iv.pos[2] = wp.z;
                 iv.size   = p.Size;
@@ -680,12 +692,14 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
                 iv.pad[1] = iv.pad[2] = 0.0f;
                 iv.color[0] = p.Color.x * ei; iv.color[1] = p.Color.y * ei;
                 iv.color[2] = p.Color.z * ei; iv.color[3] = p.Color.w;
+                iv.vel[0] = wv.x; iv.vel[1] = wv.y; iv.vel[2] = wv.z;
                 ++total; ++n;
             }
             if (n == 0) continue;
             bool hasTex = !d.SpriteTexturePath.empty();
             uint32_t texSlot = hasTex ? texMgr.LoadTexture(d.SpriteTexturePath) : texMgr.GetFallbackSlot();
-            items.push_back({ start, n, d.Blend, texSlot, d.SubUVCols, d.SubUVRows, hasTex ? 1 : 0 });
+            items.push_back({ start, n, d.Blend, texSlot, d.SubUVCols, d.SubUVRows, hasTex ? 1 : 0,
+                              (int)d.Facing, d.VelStretch });
         }
     }
     if (items.empty()) return;
@@ -713,8 +727,9 @@ void ParticlePass::DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& g
 
     for (const Item& it : items) {
         cmd->SetPipelineState(it.blend == BlendMode::Additive ? m_spriteAddPSO.Get() : m_spritePSO.Get());
-        int subuv[4] = { it.cols, it.rows, it.hasTex, 0 };
-        cmd->SetGraphicsRoot32BitConstants(1, 4, subuv, 0);
+        int subuv[6] = { it.cols, it.rows, it.hasTex, it.facing,
+                         *reinterpret_cast<const int*>(&it.velStretch), 0 };
+        cmd->SetGraphicsRoot32BitConstants(1, 6, subuv, 0);
         cmd->SetGraphicsRootDescriptorTable(2, gfx.GetSRVGPUHandle(it.texSlot));
         cmd->DrawIndexedInstanced(6, it.count, 0, 0, it.offset);
     }
@@ -750,6 +765,7 @@ void ParticlePass::DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t fi
                 iv.pad[0] = iv.pad[1] = iv.pad[2] = 0.0f;
                 iv.color[0] = p.Color.x * ei; iv.color[1] = p.Color.y * ei;
                 iv.color[2] = p.Color.z * ei; iv.color[3] = p.Color.w;
+                iv.vel[0] = iv.vel[1] = iv.vel[2] = 0.0f;   // unused by mesh VS
                 ++total; ++n;
             }
             if (n > 0) items.push_back({ mesh, start, n });
@@ -778,170 +794,182 @@ void ParticlePass::DrawMeshParticles(ID3D12GraphicsCommandList* cmd, uint32_t fi
 
 // ── Beam draw ────────────────────────────────────────────────────────────────
 
-uint32_t ParticlePass::DrawBeams(ID3D12GraphicsCommandList* cmd, uint32_t fi,
-                                  const SceneManager& scene,
+uint32_t ParticlePass::DrawBeams(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t fi,
+                                  const SceneManager& scene, TextureManager& texMgr,
                                   const Vector3& camPos, float elapsed) {
     BeamVert* dst = m_beamMapped[fi];
 
-    auto FillBeams = [&](BlendMode targetBlend, uint32_t startOffset) -> uint32_t {
-        uint32_t vtxCount = 0;
-        for (auto& actorPtr : scene.GetActors()) {
-            auto* pc = actorPtr->GetComponent<ParticleComponent>();
-            if (!pc) continue;
-            auto* tc = actorPtr->GetComponent<TransformComponent>();
-            Vector3 origin = tc ? tc->GetWorldMatrix().GetTranslation() : Vector3{};
+    // Per-emitter items so each beam can bind its own texture + UV scroll/tiling (Niagara-style).
+    std::vector<TrailDrawItem> items;
+    uint32_t vtx = 0;
 
-            for (auto& em : pc->GetEmitters()) {
-                if (em.GetDesc().RenderMode != EmitterRenderMode::Beam) continue;
-                if (em.GetDesc().Blend != targetBlend) continue;
-                const auto& bm = em.GetDesc().Beam;
-                int   N   = (std::max)(2, bm.Segments);
-                float ei  = em.GetDesc().EmissiveIntensity;
-                float col[4] = { bm.Color.x * ei, bm.Color.y * ei, bm.Color.z * ei, bm.Color.w };
+    for (auto& actorPtr : scene.GetActors()) {
+        auto* pc = actorPtr->GetComponent<ParticleComponent>();
+        if (!pc) continue;
+        auto* tc = actorPtr->GetComponent<TransformComponent>();
+        Vector3 origin = tc ? tc->GetWorldMatrix().GetTranslation() : Vector3{};
 
-                std::vector<Vector3> pts(N + 1);
-                for (int i = 0; i <= N; ++i) {
-                    float t = static_cast<float>(i) / static_cast<float>(N);
-                    pts[i]  = Vector3(
-                        bm.Start.x + (bm.End.x - bm.Start.x) * t,
-                        bm.Start.y + (bm.End.y - bm.Start.y) * t,
-                        bm.Start.z + (bm.End.z - bm.Start.z) * t) + origin;
-                    if (i > 0 && i < N) {
-                        float phase = elapsed * bm.NoiseSpeed + t * 6.28f;
-                        float nx = std::sin(phase * 1.7f + t * 3.0f) * bm.NoiseAmp;
-                        float nz = std::cos(phase * 2.3f + t * 4.0f) * bm.NoiseAmp;
-                        pts[i].x += nx;
-                        pts[i].z += nz;
-                    }
-                }
-                for (int i = 0; i < N; ++i) {
-                    if (startOffset + vtxCount + 6 > MAX_BEAM_VERTS) break;
-                    Vector3 p0 = pts[i], p1 = pts[i + 1];
-                    Vector3 seg = (p1 - p0).GetSafeNormal();
-                    Vector3 mid = Vector3((p0.x+p1.x)*0.5f, (p0.y+p1.y)*0.5f, (p0.z+p1.z)*0.5f);
-                    Vector3 toCam = (camPos - mid).GetSafeNormal();
-                    Vector3 perp  = Vector3::Cross(seg, toCam).GetSafeNormal() * (bm.Width * 0.5f);
-                    auto PV = [&](Vector3 p, float u, float v) -> BeamVert {
-                        return { {p.x, p.y, p.z}, u, v, {col[0], col[1], col[2], col[3]} };
-                    };
-                    Vector3 a = p0 - perp, b = p0 + perp;
-                    Vector3 c = p1 - perp, d = p1 + perp;
-                    float u0 = static_cast<float>(i)   / N;
-                    float u1 = static_cast<float>(i+1) / N;
-                    dst[startOffset + vtxCount++] = PV(a, u0, 0);
-                    dst[startOffset + vtxCount++] = PV(b, u0, 1);
-                    dst[startOffset + vtxCount++] = PV(d, u1, 1);
-                    dst[startOffset + vtxCount++] = PV(a, u0, 0);
-                    dst[startOffset + vtxCount++] = PV(d, u1, 1);
-                    dst[startOffset + vtxCount++] = PV(c, u1, 0);
+        for (auto& em : pc->GetEmitters()) {
+            const EmitterDesc& d = em.GetDesc();
+            if (d.RenderMode != EmitterRenderMode::Beam) continue;
+            const auto& bm = d.Beam;
+            int   N   = (std::max)(2, bm.Segments);
+            float ei  = d.EmissiveIntensity;
+            float col[4] = { bm.Color.x * ei, bm.Color.y * ei, bm.Color.z * ei, bm.Color.w };
+            uint32_t start = vtx;
+
+            std::vector<Vector3> pts(N + 1);
+            for (int i = 0; i <= N; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(N);
+                pts[i]  = Vector3(
+                    bm.Start.x + (bm.End.x - bm.Start.x) * t,
+                    bm.Start.y + (bm.End.y - bm.Start.y) * t,
+                    bm.Start.z + (bm.End.z - bm.Start.z) * t) + origin;
+                if (i > 0 && i < N) {
+                    float phase = elapsed * bm.NoiseSpeed + t * 6.28f;
+                    float nx = std::sin(phase * 1.7f + t * 3.0f) * bm.NoiseAmp;
+                    float nz = std::cos(phase * 2.3f + t * 4.0f) * bm.NoiseAmp;
+                    pts[i].x += nx;
+                    pts[i].z += nz;
                 }
             }
+            for (int i = 0; i < N; ++i) {
+                if (vtx + 6 > MAX_BEAM_VERTS) break;
+                Vector3 p0 = pts[i], p1 = pts[i + 1];
+                Vector3 seg = (p1 - p0).GetSafeNormal();
+                Vector3 mid = Vector3((p0.x+p1.x)*0.5f, (p0.y+p1.y)*0.5f, (p0.z+p1.z)*0.5f);
+                Vector3 toCam = (camPos - mid).GetSafeNormal();
+                Vector3 perp  = Vector3::Cross(seg, toCam).GetSafeNormal() * (bm.Width * 0.5f);
+                auto PV = [&](Vector3 p, float u, float v) -> BeamVert {
+                    return { {p.x, p.y, p.z}, u, v, {col[0], col[1], col[2], col[3]} };
+                };
+                Vector3 a = p0 - perp, b = p0 + perp;
+                Vector3 c = p1 - perp, d2 = p1 + perp;
+                float u0 = static_cast<float>(i)   / N;
+                float u1 = static_cast<float>(i+1) / N;
+                dst[vtx++] = PV(a, u0, 0);
+                dst[vtx++] = PV(b, u0, 1);
+                dst[vtx++] = PV(d2, u1, 1);
+                dst[vtx++] = PV(a, u0, 0);
+                dst[vtx++] = PV(d2, u1, 1);
+                dst[vtx++] = PV(c, u1, 0);
+            }
+            uint32_t n = vtx - start;
+            if (n == 0) continue;
+            bool hasTex = !d.SpriteTexturePath.empty();
+            uint32_t texSlot = hasTex ? texMgr.LoadTexture(d.SpriteTexturePath) : texMgr.GetFallbackSlot();
+            items.push_back({ start, n, d.Blend, texSlot, hasTex ? 1 : 0,
+                              d.Trail.UVTiling, d.Trail.UVScroll * elapsed });
         }
-        return vtxCount;
-    };
+    }
+    if (items.empty()) return 0;
 
-    auto IssueDraw = [&](ID3D12PipelineState* pso, uint32_t startVtx, uint32_t vtxCount) {
-        cmd->SetPipelineState(pso);
-        cmd->SetGraphicsRootSignature(m_beamRS.Get());
-        cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
-        cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        D3D12_VERTEX_BUFFER_VIEW vbv = {};
-        vbv.BufferLocation = m_beamVB_buf[fi]->GetGPUVirtualAddress() + (UINT64)startVtx * sizeof(BeamVert);
-        vbv.SizeInBytes    = sizeof(BeamVert) * vtxCount;
-        vbv.StrideInBytes  = sizeof(BeamVert);
-        cmd->IASetVertexBuffers(0, 1, &vbv);
-        cmd->DrawInstanced(vtxCount, 1, 0, 0);
-    };
+    IssueTrailDraws(cmd, gfx, fi, items.data(), (uint32_t)items.size());
+    return vtx;
+}
 
-    uint32_t alphaBeams = FillBeams(BlendMode::AlphaBlend, 0);
-    if (alphaBeams > 0) IssueDraw(m_beamPSO.Get(), 0, alphaBeams);
+// Shared beam/ribbon issue: bind the whole strip buffer once, then per-item set its texture + UV
+// constants and draw its vertex range. Alpha-blended items first, then additive (transparency order).
+void ParticlePass::IssueTrailDraws(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t fi,
+                                   const TrailDrawItem* items, uint32_t count) {
+    ID3D12DescriptorHeap* heaps[] = { gfx.GetSRVHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+    cmd->SetGraphicsRootSignature(m_beamRS.Get());
+    cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
+    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    D3D12_VERTEX_BUFFER_VIEW vbv = {};
+    vbv.BufferLocation = m_beamVB_buf[fi]->GetGPUVirtualAddress();
+    vbv.SizeInBytes    = sizeof(BeamVert) * MAX_BEAM_VERTS;
+    vbv.StrideInBytes  = sizeof(BeamVert);
+    cmd->IASetVertexBuffers(0, 1, &vbv);
 
-    uint32_t addBeams = FillBeams(BlendMode::Additive, alphaBeams);
-    if (addBeams > 0) IssueDraw(m_beamAddPSO.Get(), alphaBeams, addBeams);
-
-    return alphaBeams + addBeams;
+    for (int pass = 0; pass < 2; ++pass) {
+        BlendMode want = (pass == 0) ? BlendMode::AlphaBlend : BlendMode::Additive;
+        cmd->SetPipelineState(pass == 0 ? m_beamPSO.Get() : m_beamAddPSO.Get());
+        for (uint32_t i = 0; i < count; ++i) {
+            const TrailDrawItem& it = items[i];
+            if (it.blend != want) continue;
+            int tc[6] = { it.hasTex, *reinterpret_cast<const int*>(&it.tiling),
+                          *reinterpret_cast<const int*>(&it.scroll), 0, 0, 0 };
+            cmd->SetGraphicsRoot32BitConstants(1, 6, tc, 0);
+            cmd->SetGraphicsRootDescriptorTable(2, gfx.GetSRVGPUHandle(it.texSlot));
+            cmd->DrawInstanced(it.count, 1, it.offset, 0);
+        }
+    }
 }
 
 // ── Ribbon draw ──────────────────────────────────────────────────────────────
 
-void ParticlePass::DrawRibbons(ID3D12GraphicsCommandList* cmd, uint32_t fi,
-                                const SceneManager& scene,
-                                const Vector3& camPos, uint32_t beamVtxUsed) {
+void ParticlePass::DrawRibbons(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t fi,
+                                const SceneManager& scene, TextureManager& texMgr,
+                                const Vector3& camPos, float elapsed, uint32_t beamVtxUsed) {
     BeamVert* dst = m_beamMapped[fi];
 
-    auto FillRibbons = [&](BlendMode targetBlend, uint32_t startOffset) -> uint32_t {
-        uint32_t vtxCount = 0;
-        for (auto& actorPtr : scene.GetActors()) {
-            auto* pc = actorPtr->GetComponent<ParticleComponent>();
-            if (!pc) continue;
-            auto* tc = actorPtr->GetComponent<TransformComponent>();
-            Matrix4x4 world = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
-            for (auto& em : pc->GetEmitters()) {
-                if (em.GetDesc().RenderMode != EmitterRenderMode::Ribbon) continue;
-                if (em.GetDesc().Blend != targetBlend) continue;
-                float emEI = em.GetDesc().EmissiveIntensity;
-                bool  local = em.GetDesc().LocalSpace;
+    // Per-emitter items so each ribbon binds its own texture + UV scroll/tiling. Ribbon verts are
+    // appended after the beam verts already in the buffer (beamVtxUsed).
+    std::vector<TrailDrawItem> items;
+    uint32_t vtx = beamVtxUsed;
 
-                std::vector<const Particle*> sorted;
-                for (auto& p : em.GetParticles())
-                    if (p.Active) sorted.push_back(&p);
-                if (sorted.size() < 2) continue;
+    for (auto& actorPtr : scene.GetActors()) {
+        auto* pc = actorPtr->GetComponent<ParticleComponent>();
+        if (!pc) continue;
+        auto* tc = actorPtr->GetComponent<TransformComponent>();
+        Matrix4x4 world = tc ? tc->GetWorldMatrix() : Matrix4x4::Identity;
+        for (auto& em : pc->GetEmitters()) {
+            const EmitterDesc& d = em.GetDesc();
+            if (d.RenderMode != EmitterRenderMode::Ribbon) continue;
+            float emEI = d.EmissiveIntensity;
+            bool  local = d.LocalSpace;
 
-                std::sort(sorted.begin(), sorted.end(),
-                    [](const Particle* a, const Particle* b) { return a->Age > b->Age; });
+            std::vector<const Particle*> sorted;
+            for (auto& p : em.GetParticles())
+                if (p.Active) sorted.push_back(&p);
+            if (sorted.size() < 2) continue;
 
-                for (size_t i = 0; i + 1 < sorted.size(); ++i) {
-                    if (startOffset + vtxCount + 6 > MAX_BEAM_VERTS) break;
-                    const Particle* pa = sorted[i];
-                    const Particle* pb = sorted[i + 1];
-                    Vector3 p0 = local ? XformPoint(world, pa->Position) : pa->Position;
-                    Vector3 p1 = local ? XformPoint(world, pb->Position) : pb->Position;
-                    Vector3 seg = (p1 - p0).GetSafeNormal();
-                    Vector3 mid = Vector3((p0.x+p1.x)*0.5f,(p0.y+p1.y)*0.5f,(p0.z+p1.z)*0.5f);
-                    Vector3 toCam = (camPos - mid).GetSafeNormal();
-                    float w0 = pa->Size * 0.5f;
-                    float w1 = pb->Size * 0.5f;
-                    Vector3 perp0 = Vector3::Cross(seg, toCam).GetSafeNormal() * w0;
-                    Vector3 perp1 = Vector3::Cross(seg, toCam).GetSafeNormal() * w1;
-                    float u0 = static_cast<float>(i)   / sorted.size();
-                    float u1 = static_cast<float>(i+1) / sorted.size();
-                    float c0[4] = { pa->Color.x * emEI, pa->Color.y * emEI, pa->Color.z * emEI, pa->Color.w };
-                    float c1[4] = { pb->Color.x * emEI, pb->Color.y * emEI, pb->Color.z * emEI, pb->Color.w };
-                    auto PV = [&](Vector3 p, float u, float v, float* c) -> BeamVert {
-                        return { {p.x,p.y,p.z}, u, v, {c[0],c[1],c[2],c[3]} };
-                    };
-                    Vector3 a = p0 - perp0, b = p0 + perp0;
-                    Vector3 c = p1 - perp1, d = p1 + perp1;
-                    dst[startOffset + vtxCount++] = PV(a, u0, 0, c0);
-                    dst[startOffset + vtxCount++] = PV(b, u0, 1, c0);
-                    dst[startOffset + vtxCount++] = PV(d, u1, 1, c1);
-                    dst[startOffset + vtxCount++] = PV(a, u0, 0, c0);
-                    dst[startOffset + vtxCount++] = PV(d, u1, 1, c1);
-                    dst[startOffset + vtxCount++] = PV(c, u1, 0, c1);
-                }
+            std::sort(sorted.begin(), sorted.end(),
+                [](const Particle* a, const Particle* b) { return a->Age > b->Age; });
+
+            uint32_t start = vtx;
+            for (size_t i = 0; i + 1 < sorted.size(); ++i) {
+                if (vtx + 6 > MAX_BEAM_VERTS) break;
+                const Particle* pa = sorted[i];
+                const Particle* pb = sorted[i + 1];
+                Vector3 p0 = local ? XformPoint(world, pa->Position) : pa->Position;
+                Vector3 p1 = local ? XformPoint(world, pb->Position) : pb->Position;
+                Vector3 seg = (p1 - p0).GetSafeNormal();
+                Vector3 mid = Vector3((p0.x+p1.x)*0.5f,(p0.y+p1.y)*0.5f,(p0.z+p1.z)*0.5f);
+                Vector3 toCam = (camPos - mid).GetSafeNormal();
+                float w0 = pa->Size * 0.5f;
+                float w1 = pb->Size * 0.5f;
+                Vector3 perp0 = Vector3::Cross(seg, toCam).GetSafeNormal() * w0;
+                Vector3 perp1 = Vector3::Cross(seg, toCam).GetSafeNormal() * w1;
+                float u0 = static_cast<float>(i)   / sorted.size();
+                float u1 = static_cast<float>(i+1) / sorted.size();
+                float c0[4] = { pa->Color.x * emEI, pa->Color.y * emEI, pa->Color.z * emEI, pa->Color.w };
+                float c1[4] = { pb->Color.x * emEI, pb->Color.y * emEI, pb->Color.z * emEI, pb->Color.w };
+                auto PV = [&](Vector3 p, float u, float v, float* c) -> BeamVert {
+                    return { {p.x,p.y,p.z}, u, v, {c[0],c[1],c[2],c[3]} };
+                };
+                Vector3 a = p0 - perp0, b = p0 + perp0;
+                Vector3 c = p1 - perp1, d2 = p1 + perp1;
+                dst[vtx++] = PV(a, u0, 0, c0);
+                dst[vtx++] = PV(b, u0, 1, c0);
+                dst[vtx++] = PV(d2, u1, 1, c1);
+                dst[vtx++] = PV(a, u0, 0, c0);
+                dst[vtx++] = PV(d2, u1, 1, c1);
+                dst[vtx++] = PV(c, u1, 0, c1);
             }
+            uint32_t n = vtx - start;
+            if (n == 0) continue;
+            bool hasTex = !d.SpriteTexturePath.empty();
+            uint32_t texSlot = hasTex ? texMgr.LoadTexture(d.SpriteTexturePath) : texMgr.GetFallbackSlot();
+            items.push_back({ start, n, d.Blend, texSlot, hasTex ? 1 : 0,
+                              d.Trail.UVTiling, d.Trail.UVScroll * elapsed });
         }
-        return vtxCount;
-    };
+    }
+    if (items.empty()) return;
 
-    auto IssueDraw = [&](ID3D12PipelineState* pso, uint32_t startVtx, uint32_t vtxCount) {
-        cmd->SetPipelineState(pso);
-        cmd->SetGraphicsRootSignature(m_beamRS.Get());
-        cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
-        cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        D3D12_VERTEX_BUFFER_VIEW vbv = {};
-        vbv.BufferLocation = m_beamVB_buf[fi]->GetGPUVirtualAddress() + (UINT64)startVtx * sizeof(BeamVert);
-        vbv.SizeInBytes    = sizeof(BeamVert) * vtxCount;
-        vbv.StrideInBytes  = sizeof(BeamVert);
-        cmd->IASetVertexBuffers(0, 1, &vbv);
-        cmd->DrawInstanced(vtxCount, 1, 0, 0);
-    };
-
-    uint32_t alphaRibbons = FillRibbons(BlendMode::AlphaBlend, beamVtxUsed);
-    if (alphaRibbons > 0) IssueDraw(m_beamPSO.Get(), beamVtxUsed, alphaRibbons);
-
-    uint32_t addRibbons = FillRibbons(BlendMode::Additive, beamVtxUsed + alphaRibbons);
-    if (addRibbons > 0) IssueDraw(m_beamAddPSO.Get(), beamVtxUsed + alphaRibbons, addRibbons);
+    IssueTrailDraws(cmd, gfx, fi, items.data(), (uint32_t)items.size());
 }
 
 // ── GPU sprite draw (compute spawn+update → graphics draw) ───────────────────
@@ -976,7 +1004,8 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
         uint32_t          maxParticles;
         bool              additive;
         uint32_t          texSlot;
-        int               cols, rows, hasTex;
+        int               cols, rows, hasTex, facing;
+        float             velStretch;
     };
     std::vector<GPUDrawEntry> drawList;
 
@@ -1109,8 +1138,10 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
                 uint32_t UseVortex;         float VortexStrength;    float VortexInward;     float VortexRadius; // row 16
                 float    VortexCenter[3];   float _vcpad;            // row 17
                 float    VortexAxis[3];     float _vapad;            // row 18
+                uint32_t UseWind;           float WindDrag;          float _wpad[2];         // row 19
+                float    WindVelocity[3];   float _wpad2;            // row 20
             };
-            static_assert(sizeof(UpdateParamsCB) == 304, "UpdateParamsCB layout mismatch");
+            static_assert(sizeof(UpdateParamsCB) == 336, "UpdateParamsCB layout mismatch");
 
             UpdateParamsCB upCB = {};
             upCB.Gravity[0]      = desc.Update.Gravity.x;
@@ -1159,6 +1190,11 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             upCB.VortexAxis[0]  = desc.Update.VortexAxis.x;
             upCB.VortexAxis[1]  = desc.Update.VortexAxis.y;
             upCB.VortexAxis[2]  = desc.Update.VortexAxis.z;
+            upCB.UseWind        = desc.Update.UseWind ? 1u : 0u;
+            upCB.WindDrag       = desc.Update.WindDrag;
+            upCB.WindVelocity[0] = desc.Update.WindVelocity.x;
+            upCB.WindVelocity[1] = desc.Update.WindVelocity.y;
+            upCB.WindVelocity[2] = desc.Update.WindVelocity.z;
             memcpy(s.computeCBMapped[fi] + 256, &upCB, sizeof(upCB));
 
             // ── Transition particle buffer to UAV for compute ────────────────
@@ -1206,7 +1242,8 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
             bool hasTex = !desc.SpriteTexturePath.empty();
             uint32_t texSlot = hasTex ? texMgr.LoadTexture(desc.SpriteTexturePath) : texMgr.GetFallbackSlot();
             drawList.push_back({ &s, maxP, desc.Blend == BlendMode::Additive,
-                                 texSlot, desc.SubUVCols, desc.SubUVRows, hasTex ? 1 : 0 });
+                                 texSlot, desc.SubUVCols, desc.SubUVRows, hasTex ? 1 : 0,
+                                 (int)desc.Facing, desc.VelStretch });
         }
     }
 
@@ -1233,8 +1270,9 @@ void ParticlePass::DrawGPUSprites(ID3D12GraphicsCommandList* cmd,
         if (pso != curPSO) { cmd->SetPipelineState(pso); curPSO = pso; }
         cmd->SetGraphicsRootConstantBufferView(0, m_passCB[fi]->GetGPUVirtualAddress());
         cmd->SetGraphicsRootShaderResourceView(1, entry.state->particleBuf->GetGPUVirtualAddress());
-        int subuv[4] = { entry.cols, entry.rows, entry.hasTex, 0 };
-        cmd->SetGraphicsRoot32BitConstants(2, 4, subuv, 0);
+        int subuv[6] = { entry.cols, entry.rows, entry.hasTex, entry.facing,
+                         *reinterpret_cast<const int*>(&entry.velStretch), 0 };
+        cmd->SetGraphicsRoot32BitConstants(2, 6, subuv, 0);
         cmd->SetGraphicsRootDescriptorTable(3, gfx.GetSRVGPUHandle(entry.texSlot));
         cmd->DrawInstanced(6, entry.maxParticles, 0, 0);
     }

@@ -67,12 +67,16 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["lightRenderer"]         = LightRenderer;
     j["lightIntensity"]        = LightIntensity;
     j["lightRange"]            = LightRange;
+    j["lightRadiusScale"]      = LightRadiusScale;
     j["lightMaxCount"]         = LightMaxCount;
     j["lightUseParticleColor"] = LightUseParticleColor;
     j["lightColor"]            = Vec3J(LightColor);
     j["spriteTexture"] = SpriteTexturePath;
     j["subUVCols"]     = SubUVCols;
     j["subUVRows"]     = SubUVRows;
+    j["facing"]        = (Facing == SpriteFacing::VelocityStretch) ? "stretch"
+                       : (Facing == SpriteFacing::Velocity)        ? "velocity" : "camera";
+    j["velStretch"]    = VelStretch;
     j["meshPath"]      = MeshPath;
 
     j["spawn"]["burstMode"]     = Spawn.BurstMode;
@@ -111,6 +115,9 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["update"]["attractorPos"]      = Vec3J(Update.AttractorPos);
     j["update"]["attractorStrength"] = Update.AttractorStrength;
     j["update"]["attractorRadius"]   = Update.AttractorRadius;
+    j["update"]["useWind"]        = Update.UseWind;
+    j["update"]["windVelocity"]   = Vec3J(Update.WindVelocity);
+    j["update"]["windDrag"]       = Update.WindDrag;
     j["update"]["useVortex"]      = Update.UseVortex;
     j["update"]["vortexCenter"]   = Vec3J(Update.VortexCenter);
     j["update"]["vortexAxis"]     = Vec3J(Update.VortexAxis);
@@ -131,6 +138,9 @@ void EmitterDesc::ToJson(nlohmann::json& j) const {
     j["beam"]["noiseAmp"]   = Beam.NoiseAmp;
     j["beam"]["noiseSpeed"] = Beam.NoiseSpeed;
     j["beam"]["color"]      = Vec4J(Beam.Color);
+
+    j["trail"]["uvTiling"]  = Trail.UVTiling;
+    j["trail"]["uvScroll"]  = Trail.UVScroll;
 }
 
 void EmitterDesc::FromJson(const nlohmann::json& j) {
@@ -146,12 +156,19 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
     LightRenderer         = j.value("lightRenderer", false);
     LightIntensity        = j.value("lightIntensity", 2.0f);
     LightRange            = j.value("lightRange", 3.0f);
+    LightRadiusScale      = j.value("lightRadiusScale", 0.0f);
     LightMaxCount         = j.value("lightMaxCount", 8);
     LightUseParticleColor = j.value("lightUseParticleColor", true);
     LightColor   = Vec3F(j.value("lightColor", nlohmann::json::array()), {1,1,1});
     SpriteTexturePath = j.value("spriteTexture", std::string());
     SubUVCols         = j.value("subUVCols", 1);
     SubUVRows         = j.value("subUVRows", 1);
+    {
+        std::string f = j.value("facing", std::string("camera"));
+        Facing = (f == "stretch")  ? SpriteFacing::VelocityStretch
+               : (f == "velocity") ? SpriteFacing::Velocity : SpriteFacing::Camera;
+    }
+    VelStretch        = j.value("velStretch", 0.05f);
     MeshPath          = j.value("meshPath", std::string());
 
     if (j.contains("spawn")) {
@@ -196,6 +213,9 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
         Update.AttractorPos      = Vec3F(u.value("attractorPos", nlohmann::json::array()), {0,0,0});
         Update.AttractorStrength = u.value("attractorStrength", 5.0f);
         Update.AttractorRadius   = u.value("attractorRadius",   10.0f);
+        Update.UseWind        = u.value("useWind",        false);
+        Update.WindVelocity   = Vec3F(u.value("windVelocity", nlohmann::json::array()), {1,0,0});
+        Update.WindDrag       = u.value("windDrag",       1.0f);
         Update.UseVortex      = u.value("useVortex",      false);
         Update.VortexCenter   = Vec3F(u.value("vortexCenter", nlohmann::json::array()), {0,0,0});
         Update.VortexAxis     = Vec3F(u.value("vortexAxis",   nlohmann::json::array()), {0,1,0});
@@ -221,6 +241,11 @@ void EmitterDesc::FromJson(const nlohmann::json& j) {
         Beam.NoiseAmp   = b.value("noiseAmp",   0.2f);
         Beam.NoiseSpeed = b.value("noiseSpeed", 3.0f);
         Beam.Color      = Vec4F(b.value("color", nlohmann::json::array()), {0.5f,0.8f,1,1});
+    }
+    if (j.contains("trail")) {
+        auto& t = j["trail"];
+        Trail.UVTiling = t.value("uvTiling", 1.0f);
+        Trail.UVScroll = t.value("uvScroll", 0.0f);
     }
 }
 

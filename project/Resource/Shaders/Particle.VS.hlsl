@@ -4,9 +4,10 @@ cbuffer PerPass : register(b0) {
     float3 CamUp;    float _p1;
 };
 
-// Per-emitter (root constants): flipbook grid + texture flag.
+// Per-emitter (root constants): flipbook grid + texture flag + sprite facing.
 cbuffer SubUVCB : register(b1) {
-    int SubUVCols; int SubUVRows; int HasTexture; int _su;
+    int SubUVCols; int SubUVRows; int HasTexture; int Facing;   // Facing: 0=Camera 1=Velocity 2=Stretch
+    float VelStretch; int _su1; int _su2; int _su3;
 };
 
 // Remap a [0,1] quad uv into the current flipbook frame's sub-rect based on age fraction.
@@ -32,6 +33,7 @@ struct VSIn {
     float  InstRot  : INST_ROT;
     float3 _Pad     : INST_PAD;
     float4 InstColor: INST_COL;
+    float3 InstVel  : INST_VEL;
 };
 
 struct VSOut {
@@ -41,14 +43,30 @@ struct VSOut {
 };
 
 VSOut main(VSIn v) {
-    float c = cos(v.InstRot);
-    float s = sin(v.InstRot);
-    float2 r = float2(c * v.LocalXY.x - s * v.LocalXY.y,
-                      s * v.LocalXY.x + c * v.LocalXY.y);
+    // Velocity in the camera (screen) plane, used by the velocity facing modes.
+    float2 velS = float2(dot(v.InstVel, CamRight), dot(v.InstVel, CamUp));
+    float  slen = length(velS);
+
+    float2 off;   // quad offset in the (CamRight, CamUp) basis, in size units
+    if (Facing > 0 && slen > 1e-4) {
+        // Align the quad's Y axis to the screen-space velocity; X is perpendicular. Stretch the
+        // length axis by speed for the Stretch mode (motion streaks). Per-particle rotation is
+        // intentionally ignored here (Niagara velocity alignment overrides rotation).
+        float2 vdir  = velS / slen;
+        float2 vperp = float2(-vdir.y, vdir.x);
+        float  lenScale = (Facing == 2) ? (1.0 + length(v.InstVel) * VelStretch) : 1.0;
+        off = v.LocalXY.x * vperp + v.LocalXY.y * vdir * lenScale;
+    } else {
+        // Camera-facing billboard with per-particle rotation.
+        float c = cos(v.InstRot);
+        float s = sin(v.InstRot);
+        off = float2(c * v.LocalXY.x - s * v.LocalXY.y,
+                     s * v.LocalXY.x + c * v.LocalXY.y);
+    }
 
     float3 worldPos = v.InstPos
-                    + CamRight * r.x * v.InstSize
-                    + CamUp    * r.y * v.InstSize;
+                    + CamRight * off.x * v.InstSize
+                    + CamUp    * off.y * v.InstSize;
 
     VSOut o;
     o.SvPos = mul(ViewProj, float4(worldPos, 1.0));

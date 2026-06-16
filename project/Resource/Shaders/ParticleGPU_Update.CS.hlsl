@@ -37,6 +37,8 @@ cbuffer UpdateParams : register(b0) {
     uint UseVortex; float VortexStrength; float VortexInward; float VortexRadius;  // row 16
     float3 VortexCenter; float _vcpad;  // row 17
     float3 VortexAxis;   float _vapad;  // row 18
+    uint UseWind; float WindDrag; float2 _wpad;  // row 19
+    float3 WindVelocity; float _wpad2;  // row 20
 };
 
 float SampleSizeCurve(float t) {
@@ -88,6 +90,12 @@ void main(uint3 id : SV_DispatchThreadID) {
             float falloff = 1.0 - dist / AttractorRadius;
             p.vel += (diff / dist) * AttractorStrength * falloff * DT;
         }
+    }
+
+    // Wind: drag velocity toward the wind velocity. Matches the CPU path in Emitter.cpp.
+    if (UseWind) {
+        float k = min(1.0, WindDrag * DT);
+        p.vel += (WindVelocity - p.vel) * k;
     }
 
     // Vortex: tangential swirl around the axis line through VortexCenter + inward/outward pull.

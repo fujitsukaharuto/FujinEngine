@@ -18,7 +18,8 @@ struct LightData {
     float3 Position;  float Type;
     float3 Direction; float Range;
     float3 Color;     float Intensity;
-    float  SpotAngle; float ShadowIndex; float2 _lpad;   // ShadowIndex = -1 if no spot shadow
+    float  SpotAngle; float ShadowIndex;                 // ShadowIndex = -1 if no spot shadow
+    float  Falloff;   float _lpad;                        // Falloff>0.5 = bright-core inverse-square (particle lights)
 };
 
 // All scene lights (no fixed cap), plus the per-cluster light index list built on the CPU.
@@ -282,8 +283,21 @@ float4 main(float4 sv : SV_POSITION, float2 uv : TEXCOORD0) : SV_Target {
             float3 toL = light.Position - wpos;
             float  d   = length(toL);
             L   = toL / (d + 0.0001);
-            float a = saturate(1.0 - d / max(light.Range, 0.001));
-            att = a * a;
+            float range = max(light.Range, 0.001);
+            if (light.Falloff > 0.5) {
+                // Bright-core inverse-square with a smooth window to 0 at range (UE/Niagara look).
+                // Range-normalised so it peaks at 1 at the centre (no HDR blow-out vs the old model),
+                // but with a far punchier core — what makes particle lights read as glowing emitters.
+                float dr  = saturate(d / range);
+                float win = 1.0 - dr * dr * dr * dr;
+                win = win * win;
+                float invSq = 1.0 / (1.0 + 8.0 * (d * d) / (range * range));
+                att = win * invSq;
+            } else {
+                // Authored point/spot lights keep the original normalised falloff (no regression).
+                float a = saturate(1.0 - d / range);
+                att = a * a;
+            }
             // Spot cone falloff (Type 2). SpotAngle is the full cone aperture (degrees).
             if (light.Type > 1.5) {
                 float3 spotDir  = normalize(light.Direction);

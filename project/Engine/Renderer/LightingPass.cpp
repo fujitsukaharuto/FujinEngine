@@ -577,6 +577,7 @@ void LightingPass::Execute(ID3D12GraphicsCommandList* cmd,
         gl.intensity = pl.intensity;
         gl.spotAngle = 0.0f;
         gl.shadowIndex = -1.0f;
+        gl.pad[0]    = 1.0f;   // falloff flag: particle lights use the bright-core inverse-square model
         memcpy(sb + (size_t)lightCount * GPU_LIGHT_STRIDE, &gl, GPU_LIGHT_STRIDE);
         cullItems.push_back({ pl.pos, pl.range, false });
         ++lightCount;

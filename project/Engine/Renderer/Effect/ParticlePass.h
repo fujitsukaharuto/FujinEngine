@@ -36,14 +36,16 @@ private:
     static constexpr uint32_t MAX_BEAM_VERTS = 4096;
     static constexpr uint32_t PASS_CB_SIZE  = 256;
 
-    // Sprite instance data (matches HLSL input)
+    // Sprite instance data (matches HLSL input). vel is appended last so the sprite/mesh layouts that
+    // read pos/size/rot/pad/color keep their original offsets; only the sprite VS reads vel (facing).
     struct InstanceVert {
         float pos[3];
         float size;
         float rot;
-        float pad[3];
+        float pad[3];     // pad[0] = age/lifetime (flipbook frame)
         float color[4];
-    }; // 48 bytes
+        float vel[3];     // world-space velocity, for SpriteFacing velocity/stretch modes
+    }; // 60 bytes
 
     // Beam/Ribbon vertex
     struct BeamVert {
@@ -95,12 +97,16 @@ private:
 
     void DrawSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t frameIdx,
                      const SceneManager& scene, TextureManager& texMgr);
-    uint32_t DrawBeams(ID3D12GraphicsCommandList* cmd, uint32_t frameIdx,
-                       const SceneManager& scene,
+    // Per-emitter beam/ribbon draw item: a vertex sub-range plus its texture + UV scroll/tiling.
+    struct TrailDrawItem { uint32_t offset, count; BlendMode blend; uint32_t texSlot; int hasTex; float tiling, scroll; };
+    void IssueTrailDraws(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t frameIdx,
+                         const TrailDrawItem* items, uint32_t count);
+    uint32_t DrawBeams(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t frameIdx,
+                       const SceneManager& scene, TextureManager& texMgr,
                        const Vector3& camPos, float elapsed);
-    void DrawRibbons(ID3D12GraphicsCommandList* cmd, uint32_t frameIdx,
-                     const SceneManager& scene,
-                     const Vector3& camPos, uint32_t beamVtxUsed);
+    void DrawRibbons(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx, uint32_t frameIdx,
+                     const SceneManager& scene, TextureManager& texMgr,
+                     const Vector3& camPos, float elapsed, uint32_t beamVtxUsed);
     void DrawGPUSprites(ID3D12GraphicsCommandList* cmd, GraphicsDevice& gfx,
                         const SceneManager& scene, TextureManager& texMgr,
                         uint32_t frameIdx, float dt, float elapsed,
