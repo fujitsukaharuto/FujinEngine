@@ -171,12 +171,6 @@
     <None Include="Resource\Shaders\TonemapFXAA.PS.hlsl">
       <Filter>Resource\Shaders</Filter>
     </None>
-    <None Include="Resource\Shaders\Translucency.VS.hlsl">
-      <Filter>Resource\Shaders</Filter>
-    </None>
-    <None Include="Resource\Shaders\Translucency.PS.hlsl">
-      <Filter>Resource\Shaders</Filter>
-    </None>
     <None Include="Resource\Shaders\Random.hlsli">
       <Filter>Resource\Shaders</Filter>
     </None>
@@ -426,9 +420,6 @@
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Renderer\LightingPass.h">
-      <Filter>Engine\Renderer</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Renderer\TranslucencyPass.h">
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Renderer\ShadowPass.h">

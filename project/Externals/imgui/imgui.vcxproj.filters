@@ -18,6 +18,7 @@
     <ClCompile Include="ImGuiFileDialog.cpp" />
     <ClCompile Include="implot.cpp" />
     <ClCompile Include="implot_items.cpp" />
+    <ClCompile Include="crude_json.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="crude_json.h" />
